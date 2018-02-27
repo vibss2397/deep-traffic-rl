@@ -12,15 +12,15 @@ def calc_dist(a,b):
     dist_sqroot=np.sqrt(max(dist,K.epsilon()))
     return dist_sqroot.astype(np.float32)
 
-def test_eucledian_distance(a,b):
-    image0 = K.variable(value=a)
-    image1 = K.variable(value=b)
+def test_eucledian_distance():
+    image0 = K.variable(value=arr1)
+    image1 = K.variable(value=arr2)
     dist = network.euclidean_distance([image0,image1])
     evaluate=K.eval(dist)
     assert (evaluate==calc_dist(a,b))
 
 def test_eucl_distance_output_shape():
-    vect=[a.shape,b.shape]
+    vect=[arr1.shape,arr2.shape]
     shape=network.eucl_dist_output_shape(vect)
     assert(shape==(1,1))
 
