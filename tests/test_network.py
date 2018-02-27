@@ -27,10 +27,11 @@ def test_eucl_distance_output_shape():
 
 def test_contrastive_loss():
     euclid_dist=calc_dist(arr1,arr2)
-    loss1=network.contrastive_loss(euclid_dist,1) #if we assume 1 was the output
-    loss2=network.contrastive_loss(euclid_dist,0) #if we assume 0 was the output
+    loss1=network.contrastive_loss(1,euclid_dist) #if we assume 1 was the output
+    loss2=network.contrastive_loss(0,euclid_dist) #if we assume 0 was the output
     eval1=K.eval(loss1)
     eval2=K.eval(loss2)
     assert(eval1>=0)
     assert(eval2>=0)
 
+# def test_
