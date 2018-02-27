@@ -17,7 +17,7 @@ def test_eucledian_distance():
     image1 = K.variable(value=arr2)
     dist = network.euclidean_distance([image0,image1])
     evaluate=K.eval(dist)
-    assert (evaluate==calc_dist(a,b))
+    assert (evaluate==calc_dist(arr1,arr2))
 
 def test_eucl_distance_output_shape():
     vect=[arr1.shape,arr2.shape]
@@ -25,8 +25,8 @@ def test_eucl_distance_output_shape():
     assert(shape==(1,1))
 
 
-def test_contrastive_loss(a,b):
-    euclid_dist=calc_dist(a,b)
+def test_contrastive_loss():
+    euclid_dist=calc_dist(arr1,arr2)
     loss=network.contrastive_loss(euclid_dist,1)
     eval=K.eval(loss)
     assert(eval==0)
