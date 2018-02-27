@@ -6,7 +6,6 @@ import numpy as np
 arr1 = np.random.rand(1, 128)
 arr2 = arr1*0.92
 
-
 def calc_dist(a, b):
     dist = np.sum(np.square(a-b))
     dist_sqroot = np.sqrt(max(dist, K.epsilon()))
@@ -28,10 +27,10 @@ def test_eucl_distance_output_shape():
 
 
 def test_contrastive_loss():
-    euclid_dist=calc_dist(arr1 , arr2)
-    loss1 = network.contrastive_loss(float(1), euclid_dist)  #if we assume 1 was the output
-    loss2 = network.contrastive_loss(float(0), euclid_dist)  #if we assume 0 was the output
+    euclid_dist=network.euclidean_distance([arr1,arr2])
+    loss1 = network.contrastive_loss(1, euclid_dist)  #if we assume 1 was the output
+    loss2 = network.contrastive_loss(0, euclid_dist)  #if we assume 0 was the output
     eval1 = K.eval(loss1)
     eval2 = K.eval(loss2)
-    assert (eval1 >= 0)
-    assert (eval2 >= 0)
+    assert (eval1>=0)
+    assert (eval2>=0)
