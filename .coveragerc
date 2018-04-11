@@ -1,6 +1,0 @@
-[report]
-omit =
-    data/*
-    data_resized/*
-    tools/*
-    label_persons/*
