@@ -9,25 +9,36 @@ var img;
 var img2;
 
 function preload() {
-    img = loadImage('assets/police.png');
-    img2 = loadImage('assets/car.png');
+    img2 = loadImage('assets/police.png');
+    img = loadImage('assets/car.png');
 }
 
 function getLevel(){
-    return(Math.floor(frameCount/100));
+    return(int)(frameCount/500);
 }
 
 function getEnemyNumber(level){
      min = Math.ceil(1);
-     max = Math.floor(4);
-    return 2;
+     max = Math.floor(3);
+     var a;    
+    if(level<1500){
+                a=Math.floor(Math.random()*1)+1;
+    }
+    else if(level>1500 && level<4000){
+    a=Math.floor(Math.random()*2)+1;}
+    else if(level>4000 && level<7500){
+    a=Math.floor(Math.random()*3)+1;}
+    else if(level>7500 && level<10000){
+    a=Math.floor(Math.random()*4)+1;}
+    return a;
 }
 
 function pushEnemyToArray(number){
     temp=[0,0,0,0];
     var same=0;
+    var a;
     for(var i=0;i<number;i++){
-        var a=new Enemy();
+        a=new Enemy();
         if(temp[a.rando-1]==1){
             for(let j=3;j>=0;j--){
                 if(temp[j]==0){
@@ -36,16 +47,16 @@ function pushEnemyToArray(number){
                     break;
                 }
             }
-        } else temp[a.rando]=1;
+        } else temp[a.rando-1]=1;
         
         if(enemies.length!=0){
             for(let j=0;j<enemies.length;j++){
                 if(enemies[j].rando==a.rando){
                     if(enemies[j].speed<a.speed){
-                        same=1;
-                    }
+                        same=0
+                    } else same=1;
                     
-                } else {same=1;}
+                } else same=1;
             }
         }else same=1;
         console.log(temp);
@@ -54,12 +65,12 @@ function pushEnemyToArray(number){
 }
 
 function setup() {
-  createCanvas(500, 500);
+ createCanvas(500, windowHeight);    
  for(var i=0; i<34 ;i++){
      roads.push(new Road());
  }
 car=new Car();
-enemy=new Enemy();    
+enemy=new Enemy();       
 }
 
 function draw() {
@@ -70,7 +81,7 @@ function draw() {
   strokeWeight(2);
   
   line(width/4, 0, width/4, height);
-  line(3*width/4, 0, 3*width/4, height);
+  line(3*width/4, 0, 3*width/4, height);     
   strokeWeight(0);
     
     for (var i = roads.length-1; i >= 0; i--) {
@@ -87,23 +98,37 @@ function draw() {
         }
     if(frameCount>134){
         car.show(img);
+        let a=Math.floor(frameCount/5);
+        fill(0);
+        textSize(18);
+        text('Score : '+a,width-100,32);
+        
         if(frameCount%300==0){
             var en=getEnemyNumber(getLevel());
             pushEnemyToArray(en);
         }
-        
+     if(car.highlight==true){
+         text('Reward : -1',width-100,60);
+     } else text('Reward : 1',width-100,60);   
     }
-    for(var i=enemies.length-1;i>=0;i--){
-            enemies[i].show(img2);
+    for(let k=enemies.length-1;k>=0;k--){
+            enemies[k].show(img2);
             
-            enemies[i].update();
+            enemies[k].update();
             
-               if (enemies[i].hits(car)) {
-                    console.log("HIT");
+               if (enemies[k].hits(car,img)) {
+                    enemies[k].highlight=true;
+                   car.highlight=true;
+                } else {
+                    car.highlight=false;
+                    enemies[k].highlight=false;
                 }
-            if(enemies[i].offscreen()){
-                enemies.splice(i,1);
+                
+              if(enemies[k].offscreen()){
+                enemies[k].highlight=false;
+                enemies.splice(k,1);
             }
+                 
         }
 }
 

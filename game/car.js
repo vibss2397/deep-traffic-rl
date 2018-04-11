@@ -1,14 +1,13 @@
 function Car() {
-  this.y = height-80;
+  this.y = height-120;
   this.x=6.2*width/16;
-
-  this.gravity = 0.6;
-  this.lift = -15;
-  this.velocity = 0;
-  
+  this.highlight=false;
   this.show = function(img) {
-    fill(255);
-    image(img,this.x,this.y,img.width/6,img.height/6);
+    noTint();
+    if(this.highlight){
+        tint(0, 153, 204, 126); // Tint blue and set transparency
+    } 
+    image(img,this.x,this.y,img.width/5.7,img.height/5.7);
   }
 
 

@@ -2,27 +2,27 @@ function Enemy() {
   this.top = 0;
   this.bottom = height;
   this.x1 = 2.2*width/16;
-  this.interspace = width/6;
-  this.height= 0;   
-  this.speed = (Math.random()*1.2)+0.5;
+  this.interspace = width/6;  
+  this.speed = (Math.random()*1.2)+1;
   this.rando = Math.floor((Math.random() * (Math.floor(4)-Math.ceil(1)+1))+1);
   this.highlight = false;
   this.final=this.x1+2*this.rando*width/16;
 
-  this.hits = function(car) {
-    if(car.x==this.final){
-        if(car.y==this.top) return true;
+  this.hits = function(car,img) {
+    if(car.x==this.x1+2*this.rando*width/16){
+        while((int)(this.top+img.height/5.7)>=car.y &&(int)(this.top)<=(car.y+height/5.9) ){
+            return true;
+        }
     }
-     else return false;
+     return false;
   }
 
   this.show = function(img) {
-    fill('#bbb');
-    if (this.highlight) {
-      fill(255, 0, 0);
-    }
-    strokeWeight(2);  
-    image(img,this.final,this.top,img.width/7,img.height/7)
+   noTint();
+      if(this.highlight){
+        tint(0, 153, 204, 126); // Tint blue and set transparency
+    }  
+    image(img,this.x1+2*this.rando*width/16,this.top,img.width/5.7,img.height/5.7);
   }
   
 //  this.setSpeed=function(level){
