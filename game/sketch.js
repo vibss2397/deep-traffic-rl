@@ -14,21 +14,21 @@ function preload() {
 }
 
 function getLevel(){
-    return(int)(frameCount/500);
+    return Math.floor(frameCount/5);
 }
 
 function getEnemyNumber(level){
      min = Math.ceil(1);
      max = Math.floor(3);
      var a;    
-    if(level<1500){
+    if(level<=500){
                 a=Math.floor(Math.random()*1)+1;
     }
-    else if(level>1500 && level<4000){
+    else if(level>500 && level<=1000){
     a=Math.floor(Math.random()*2)+1;}
-    else if(level>4000 && level<7500){
+    else if(level>1000 && level<=2500){
     a=Math.floor(Math.random()*3)+1;}
-    else if(level>7500 && level<10000){
+    else if(level>2500){
     a=Math.floor(Math.random()*4)+1;}
     return a;
 }
@@ -59,7 +59,6 @@ function pushEnemyToArray(number){
                 } else same=1;
             }
         }else same=1;
-        console.log(temp);
         if(same==1){enemies.push(a);}
     }
 }
@@ -105,6 +104,7 @@ function draw() {
         
         if(frameCount%300==0){
             var en=getEnemyNumber(getLevel());
+            console.log(getLevel()+'----'+en);
             pushEnemyToArray(en);
         }
      if(car.highlight==true){
