@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Doodle Dash - Road Generation</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
+  <style>
+    body {
+      margin: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      background-color: #f0f0f0;
+    }
+  </style>
+</head>
+<body>
+  <script>
+    // Game states
+    const GAME_STATES = {
+      PLAYING: 'playing',
+      GAME_OVER: 'game_over'
+    };
+    
+    // Current game state
+    let gameState = GAME_STATES.PLAYING;
+    
+    // Game speed (scrolling speed)
+    let gameSpeed = 2;
+    
+    // Player car with enhanced physics
+    let playerCar = {
+      x: 300,
+      y: 700,
+      width: 40,
+      height: 70,
+      speedX: 0,
+      speedY: 0,
+      maxSpeed: 5,
+      acceleration: 0.2,
+      friction: 0.9,
+      tilt: 0,
+      maxTilt: 0.15,
+      collided: false
+    };
+    
+    // Drawing stages for the drawing-in-progress effect
+    const DRAWING_STAGES = {
+      SKETCH: 0,       // Initial light pencil sketch
+      DARKENING: 1,    // Darkening the lines
+      COMPLETE: 2      // Fully drawn and visible
+    };
+    
+    // Road variables
+    let baseRoadWidth = 300;
+    let roadPos = 300; // center of the road
+    
+    // Road segments for scrolling effect
+    let roadSegments = [];
+    
+    // Drawing cursor (represents the "artist's pencil")
+    let drawingCursor = {
+      x: 300,
+      y: 50,
+      targetX: 300,
+      targetY: 50,
+      speed: 15
+    };
+    
+    // Decorative elements
+    let paperSmudges = [];
+    let coffeeStains = [];
+    
+    // Canvas setup
+    function setup() {
+      createCanvas(600, 800);
+      console.log("Canvas created with size 600x800");
+      
+      // Create random smudges and stains
+      createPaperDecorations();
+      
+      // Initialize road segments
+      initializeRoad();
+    }
+    
+    // Initialize road segments
+    function initializeRoad() {
+      // Create initial road segments from bottom to top
+      for (let y = height + 100; y >= -100; y -= 50) {
+        // Bottom segments are fully drawn
+        let stage = y > height / 2 ? DRAWING_STAGES.COMPLETE : 
+                   (y > 100 ? DRAWING_STAGES.DARKENING : DRAWING_STAGES.SKETCH);
+        
+        let opacity = y > height / 2 ? 255 : 
+                     (y > 100 ? map(y, 100, height/2, 100, 255) : 80);
+        
+        // Add slight curve to the road
+        let segmentX = roadPos;
+        if (y < height / 2) {
+          // Add some gentle curves to upcoming segments
+          segmentX += sin(y * 0.01) * 50;
+        }
+        
+        // Calculate road width with slight variation
+        let roadWidth = baseRoadWidth + sin(y * 0.05) * 20;
+        
+        roadSegments.push({
+          x: segmentX,
+          y: y,
+          width: roadWidth,
+          stage: stage,
+          opacity: opacity
+        });
+      }
+    }
+    
+    // Create paper decorations (smudges, stains)
+    function createPaperDecorations() {
+      // Create random pencil smudges
+      for (let i = 0; i < 5; i++) {
+        paperSmudges.push({
+          x: random(width),
+          y: random(height),
+          width: random(30, 80),
+          height: random(10, 30),
+          rotation: random(-PI/4, PI/4),
+          opacity: random(10, 30)
+        });
+      }
+      
+      // Create coffee stains
+      for (let i = 0; i < 2; i++) {
+        coffeeStains.push({
+          x: random(width),
+          y: random(height),
+          size: random(50, 120),
+          opacity: random(5, 15)
+        });
+      }
+    }
+    
+    // Main draw loop
+    function draw() {
+      background(245); // Off-white like notebook paper
+      
+      // Draw notebook paper grid lines and decorations
+      drawNotebookPaper();
+      
+      if (gameState === GAME_STATES.PLAYING) {
+        // Update and draw the road
+        updateRoad();
+        drawRoad();
+        
+        // Draw the drawing cursor (pencil)
+        drawPencilCursor();
+        
+        // Handle player input and update car physics
+        updateCarPhysics();
+        
+        // Draw player car
+        drawDoodleCar(playerCar.x, playerCar.y, playerCar.tilt, playerCar.collided);
+        
+        // Draw motion lines if moving
+        if (abs(playerCar.speedX) > 0.5 || abs(playerCar.speedY) > 0.5) {
+          drawMotionLines();
+        }
+      }
+      
+      // Draw debug info
+      fill(0);
+      textSize(14);
+      textAlign(LEFT, TOP);
+      text(`Car position: x=${Math.round(playerCar.x)}, y=${Math.round(playerCar.y)}`, 20, 20);
+      text(`Game speed: ${gameSpeed.toFixed(1)}`, 20, 40);
+      text(`Road segments: ${roadSegments.length}`, 20, 60);
+      text(`Controls: A/D to steer, W/S to adjust speed`, 20, 80);
+    }
+    
+    // Update road segments (scrolling and generation)
+    function updateRoad() {
+      // Move drawing cursor (artist's pencil)
+      moveDrawingCursor();
+      
+      // Move all road segments down
+      for (let i = roadSegments.length - 1; i >= 0; i--) {
+        let segment = roadSegments[i];
+        
+        // Move segment down based on game speed
+        segment.y += gameSpeed;
+        
+        // Progress through drawing stages
+        if (segment.stage < DRAWING_STAGES.COMPLETE) {
+          if (segment.y > 200 && segment.y < 400) {
+            segment.stage = DRAWING_STAGES.DARKENING;
+            segment.opacity = min(segment.opacity + gameSpeed * 2, 255);
+          } else if (segment.y >= 400) {
+            segment.stage = DRAWING_STAGES.COMPLETE;
+            segment.opacity = 255;
+          }
+        }
+        
+        // Remove segments that are off-screen
+        if (segment.y > height + 100) {
+          roadSegments.splice(i, 1);
+        }
+      }
+      
+      // Check if we need to create a new road segment
+      if (roadSegments[0].y > -50) {
+        createNewRoadSegment();
+      }
+    }
+    
+    // Create a new road segment at the top
+    function createNewRoadSegment() {
+      // Get the most recent segment for continuity
+      let prevSegment = roadSegments[0];
+      
+      // Add slight curve to the road for interest
+      let curveAmount = random(-15, 15);
+      let newX = prevSegment.x + curveAmount;
+      
+      // Keep the road within screen bounds
+      newX = constrain(newX, baseRoadWidth/2 + 50, width - baseRoadWidth/2 - 50);
+      
+      // Calculate road width with slight variation for interest
+      let newWidth = baseRoadWidth + random(-10, 10);
+      
+      // Create the new segment
+      roadSegments.unshift({
+        x: newX,
+        y: prevSegment.y - 50, // Place it above the previous segment
+        width: newWidth,
+        stage: DRAWING_STAGES.SKETCH,
+        opacity: 80 // Start with a light sketch
+      });
+      
+      // Update the drawing cursor target to the new segment
+      drawingCursor.targetX = newX + random(-newWidth/4, newWidth/4);
+      drawingCursor.targetY = prevSegment.y - 50;
+    }
+    
+    // Move drawing cursor (artist's pencil)
+    function moveDrawingCursor() {
+      // Make the cursor move towards its target with easing
+      drawingCursor.x += (drawingCursor.targetX - drawingCursor.x) * 0.1;
+      drawingCursor.y += (drawingCursor.targetY - drawingCursor.y) * 0.1;
+      
+      // Add slight random movement for natural drawing effect
+      drawingCursor.x += random(-2, 2);
+      drawingCursor.y += random(-2, 2);
+    }
+    
+    // Draw notebook paper effect with enhanced details
+    function drawNotebookPaper() {
+      // Draw coffee stains (under the grid)
+      drawCoffeeStains();
+      
+      // Draw grid lines
+      stroke(200);
+      strokeWeight(1);
+      
+      // Horizontal lines
+      for (let y = 0; y < height; y += 20) {
+        // Add slight variance to lines for hand-drawn feel
+        beginShape();
+        for (let x = 0; x < width; x += 50) {
+          vertex(x, y + random(-0.5, 0.5));
+        }
+        endShape();
+      }
+      
+      // Vertical margin line (slightly wavy for hand-drawn effect)
+      stroke(255, 0, 0, 30);
+      strokeWeight(1.5);
+      beginShape();
+      for (let y = 0; y < height; y += 20) {
+        vertex(width * 0.1 + random(-1, 1), y);
+      }
+      endShape();
+      
+      // Draw pencil smudges (over the grid)
+      drawPencilSmudges();
+    }
+    
+    // Draw coffee stains
+    function drawCoffeeStains() {
+      for (let stain of coffeeStains) {
+        noStroke();
+        fill(139, 69, 19, stain.opacity); // Brown with low opacity
+        
+        // Draw irregular coffee stain shape
+        beginShape();
+        for (let i = 0; i < 360; i += 30) {
+          let radius = stain.size * (0.5 + 0.5 * noise(i * 0.1, frameCount * 0.01));
+          let x = stain.x + radius * cos(radians(i));
+          let y = stain.y + radius * sin(radians(i));
+          curveVertex(x, y);
+        }
+        endShape(CLOSE);
+      }
+    }
+    
+    // Draw pencil smudges
+    function drawPencilSmudges() {
+      for (let smudge of paperSmudges) {
+        noStroke();
+        fill(40, smudge.opacity);
+        
+        push();
+        translate(smudge.x, smudge.y);
+        rotate(smudge.rotation);
+        
+        // Draw smudge with noise
+        beginShape();
+        for (let i = 0; i < 10; i++) {
+          let xPos = map(i, 0, 9, -smudge.width/2, smudge.width/2);
+          let yVar = random(-smudge.height/2, smudge.height/2);
+          curveVertex(xPos, yVar);
+        }
+        endShape();
+        pop();
+      }
+    }
+    
+    // Draw the road with drawing-in-progress effect
+    function drawRoad() {
+      // Draw road segments from back to front (top to bottom)
+      for (let i = 0; i < roadSegments.length; i++) {
+        let segment = roadSegments[i];
+        drawRoadSegment(segment);
+      }
+    }
+    
+    // Draw a single road segment with appropriate drawing stage
+    function drawRoadSegment(segment) {
+      // Set stroke style based on drawing stage
+      if (segment.stage === DRAWING_STAGES.SKETCH) {
+        stroke(0, segment.opacity);
+        strokeWeight(1);
+      } else if (segment.stage === DRAWING_STAGES.DARKENING) {
+        stroke(0, segment.opacity);
+        strokeWeight(1.5);
+      } else {
+        stroke(0);
+        strokeWeight(2);
+      }
+      
+      // Draw left edge with sketch-like quality
+      beginShape();
+      for (let yOffset = -25; yOffset <= 25; yOffset += 5) {
+        // Add noise based on drawing stage
+        let noiseAmount = segment.stage === DRAWING_STAGES.SKETCH ? 3 : 
+                        (segment.stage === DRAWING_STAGES.DARKENING ? 2 : 1);
+        
+        let xPos = segment.x - segment.width/2 + random(-noiseAmount, noiseAmount);
+        vertex(xPos, segment.y + yOffset);
+      }
+      endShape();
+      
+      // Draw right edge with sketch-like quality
+      beginShape();
+      for (let yOffset = -25; yOffset <= 25; yOffset += 5) {
+        // Add noise based on drawing stage
+        let noiseAmount = segment.stage === DRAWING_STAGES.SKETCH ? 3 : 
+                        (segment.stage === DRAWING_STAGES.DARKENING ? 2 : 1);
+        
+        let xPos = segment.x + segment.width/2 + random(-noiseAmount, noiseAmount);
+        vertex(xPos, segment.y + yOffset);
+      }
+      endShape();
+      
+      // Draw center lane markings if not in sketch stage
+      if (segment.stage > DRAWING_STAGES.SKETCH) {
+        // Only draw dashed lines (every other segment)
+        if (floor(segment.y / 50) % 2 === 0) {
+          stroke(0, segment.opacity);
+          strokeWeight(segment.stage === DRAWING_STAGES.DARKENING ? 1 : 1.5);
+          
+          // Draw center line with hand-drawn quality
+          push();
+          translate(segment.x, segment.y);
+          
+          // Draw a slightly wavy line
+          beginShape();
+          for (let yOffset = -20; yOffset <= 20; yOffset += 5) {
+            let xOffset = random(-1, 1) * (segment.stage === DRAWING_STAGES.DARKENING ? 1.5 : 1);
+            vertex(xOffset, yOffset);
+          }
+          endShape();
+          pop();
+        }
+      }
+      
+      // Draw some road details/texture if fully drawn
+      if (segment.stage === DRAWING_STAGES.COMPLETE && random() > 0.7) {
+        stroke(0, 80);
+        strokeWeight(1);
+        
+        // Draw small scratches or marks
+        let x = segment.x + random(-segment.width/3, segment.width/3);
+        let y = segment.y + random(-20, 20);
+        let scratchLen = random(3, 8);
+        let angle = random(TWO_PI);
+        
+        line(
+          x, 
+          y, 
+          x + cos(angle) * scratchLen, 
+          y + sin(angle) * scratchLen
+        );
+      }
+    }
+    
+    // Draw pencil cursor
+    function drawPencilCursor() {
+      // Only show the pencil near the top segments being drawn
+      if (roadSegments[0].stage === DRAWING_STAGES.SKETCH) {
+        push();
+        translate(drawingCursor.x, drawingCursor.y);
+        rotate(PI / 4 + sin(frameCount * 0.1) * 0.1); // Slight movement for drawing effect
+        
+        // Pencil body
+        stroke(100);
+        strokeWeight(1);
+        fill(250, 220, 100); // Yellow pencil
+        rect(0, 0, 8, 40, 1, 1, 0, 0);
+        
+        // Pencil tip
+        fill(50);
+        triangle(0, -25, -4, -17, 4, -17);
+        
+        // Eraser
+        fill(255, 150, 150);
+        rect(0, 25, 8, 8, 1);
+        
+        // Metal band
+        fill(150);
+        rect(0, 20, 8, 2);
+        
+        pop();
+      }
+    }
+    
+    // Update car physics based on input
+    function updateCarPhysics() {
+      // Apply input as acceleration
+      if (keyIsDown(65)) { // A key - left
+        playerCar.speedX -= playerCar.acceleration;
+        // Tilt car left
+        playerCar.tilt = lerp(playerCar.tilt, playerCar.maxTilt, 0.1);
+      } else if (keyIsDown(68)) { // D key - right
+        playerCar.speedX += playerCar.acceleration;
+        // Tilt car right
+        playerCar.tilt = lerp(playerCar.tilt, -playerCar.maxTilt, 0.1);
+      } else {
+        // Return tilt to neutral
+        playerCar.tilt = lerp(playerCar.tilt, 0, 0.2);
+      }
+      
+      // Adjust game speed (not car y position)
+      if (keyIsDown(87)) { // W key - up/faster
+        gameSpeed = constrain(gameSpeed + 0.05, 1, 5);
+      } else if (keyIsDown(83)) { // S key - down/slower
+        gameSpeed = constrain(gameSpeed - 0.05, 1, 5);
+      }
+      
+      // Apply friction
+      playerCar.speedX *= playerCar.friction;
+      
+      // Limit max speed
+      playerCar.speedX = constrain(playerCar.speedX, -playerCar.maxSpeed, playerCar.maxSpeed);
+      
+      // Update position - only horizontal movement
+      playerCar.x += playerCar.speedX;
+      
+      // Find the current road segment the car is on
+      let currentSegmentIndex = findCurrentRoadSegment();
+      
+      if (currentSegmentIndex >= 0) {
+        let currentSegment = roadSegments[currentSegmentIndex];
+        
+        // Keep the car within the road boundaries
+        let minX = currentSegment.x - currentSegment.width/2 + playerCar.width/2;
+        let maxX = currentSegment.x + currentSegment.width/2 - playerCar.width/2;
+        
+        // Bounce off boundaries
+        if (playerCar.x < minX) {
+          playerCar.x = minX;
+          playerCar.speedX *= -0.5; // Bounce back with reduced speed
+        } else if (playerCar.x > maxX) {
+          playerCar.x = maxX;
+          playerCar.speedX *= -0.5; // Bounce back with reduced speed
+        }
+      }
+      
+      // Stop car if speed is very low
+      if (abs(playerCar.speedX) < 0.01) playerCar.speedX = 0;
+    }
+    
+    // Find the road segment at the car's position
+    function findCurrentRoadSegment() {
+      // We need to find the segment at the car's y position
+      for (let i = 0; i < roadSegments.length; i++) {
+        if (Math.abs(roadSegments[i].y - playerCar.y) < 30) {
+          return i;
+        }
+      }
+      return -1;
+    }
+    
+    // Draw motion lines behind the car
+    function drawMotionLines() {
+      stroke(0, 100);
+      strokeWeight(1);
+      
+      let lineLength = map(gameSpeed, 1, 5, 10, 30);
+      
+      // Draw several motion lines behind the car
+      for (let i = -15; i <= 15; i += 10) {
+        let lineX = playerCar.x + i;
+        let lineStartY = playerCar.y + playerCar.height/2;
+        
+        // Draw wavy motion line
+        beginShape();
+        for (let j = 0; j < lineLength; j += 5) {
+          let xOffset = random(-2, 2);
+          vertex(lineX + xOffset, lineStartY + j + random(-1, 1));
+        }
+        endShape();
+      }
+    }
+    
+    // Draw enhanced doodle car
+    function drawDoodleCar(x, y, tilt, isCollided) {
+      push();
+      translate(x, y);
+      
+      // Add collision effect or tilt effect
+      if (isCollided) {
+        rotate(random(-0.1, 0.1)); // Wobble when collided
+      } else {
+        rotate(tilt); // Tilt when turning
+      }
+      
+      rectMode(CENTER);
+      
+      // Car shadow (offset slightly)
+      noStroke();
+      fill(0, 20);
+      ellipse(2, 5, playerCar.width + 5, playerCar.height/2);
+      
+      // Car body with sketchy line quality
+      stroke(0);
+      strokeWeight(2);
+      fill(255);
+      
+      // Draw car body with slight irregularities for hand-drawn effect
+      beginShape();
+      // Top-left corner with rounded edge
+      vertex(-playerCar.width/2 + 5, -playerCar.height/2);
+      // Top edge
+      vertex(playerCar.width/2 - 5, -playerCar.height/2);
+      // Top-right corner with rounded edge
+      vertex(playerCar.width/2, -playerCar.height/2 + 5);
+      // Right edge with slight irregularity
+      vertex(playerCar.width/2 + random(-1, 1), playerCar.height/2 - 5);
+      // Bottom-right corner with rounded edge
+      vertex(playerCar.width/2 - 5, playerCar.height/2);
+      // Bottom edge with slight irregularity
+      vertex(-playerCar.width/2 + 5 + random(-1, 1), playerCar.height/2);
+      // Bottom-left corner with rounded edge
+      vertex(-playerCar.width/2, playerCar.height/2 - 5);
+      // Left edge with slight irregularity
+      vertex(-playerCar.width/2 + random(-1, 1), -playerCar.height/2 + 5);
+      endShape(CLOSE);
+      
+      // Windows with hand-drawn effect
+      fill(240);
+      beginShape();
+      vertex(-15, -25);
+      vertex(15, -25);
+      vertex(15, -5);
+      vertex(-15, -5);
+      endShape(CLOSE);
+      
+      // Add window details
+      line(-5, -25, -5, -5); // Window divider
+      
+      // Wheels with sketchy circles
+      fill(0);
+      drawSketchyCircle(-15, -25, 12);
+      drawSketchyCircle(15, -25, 12);
+      drawSketchyCircle(-15, 25, 12);
+      drawSketchyCircle(15, 25, 12);
+      
+      // Headlights
+      fill(255, 255, 200);
+      drawSketchyCircle(-10, -32, 5);
+      drawSketchyCircle(10, -32, 5);
+      
+      // Taillights
+      fill(255, 100, 100);
+      drawSketchyCircle(-10, 32, 5);
+      drawSketchyCircle(10, 32, 5);
+      
+      // Additional car details
+      stroke(0);
+      strokeWeight(1);
+      line(0, -5, 0, 20); // Center detail line
+      
+      // Door handle
+      line(-18, 0, -10, 0);
+      
+      pop();
+    }
+    
+    // Draw a sketchy circle with hand-drawn effect
+    function drawSketchyCircle(x, y, diameter) {
+      push();
+      translate(x, y);
+      
+      beginShape();
+      for (let angle = 0; angle < TWO_PI; angle += PI/8) {
+        let r = diameter/2 + random(-1, 1);
+        let px = cos(angle) * r;
+        let py = sin(angle) * r;
+        curveVertex(px, py);
+      }
+      endShape(CLOSE);
+      
+      pop();
+    }
+    
+    // Toggle collision for testing (press C)
+    function keyPressed() {
+      if (key === 'c' || key === 'C') {
+        playerCar.collided = !playerCar.collided;
+        console.log("Collision state:", playerCar.collided);
+      }
+    }
+  </script>
+</body>
+</html>
