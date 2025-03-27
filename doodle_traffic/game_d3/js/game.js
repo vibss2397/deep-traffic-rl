@@ -1,12 +1,14 @@
 // Game class - Main game loop and state management
 import { InputHandler } from './input.js';
 import { SceneManager } from './scene-manager.js';
+import { createPlayer } from './objects/player.js';
 
 export class Game {
     constructor() {
         this.isRunning = false;
         this.inputHandler = null;
         this.sceneManager = null;
+        this.player = null;
         this.lastTime = 0;
     }
 
@@ -18,6 +20,16 @@ export class Game {
         // Initialize input handler
         this.inputHandler = new InputHandler();
         this.inputHandler.init();
+        
+        // Create player
+        this.player = createPlayer();
+        this.sceneManager.addToScene(this.player.mesh);
+        
+        // Add collision debug box to scene
+        this.sceneManager.addToScene(this.player.debugCollider);
+        
+        // Position camera to follow player
+        this.sceneManager.setCameraTarget(this.player.mesh);
 
         // Bind this to animation loop
         this.animate = this.animate.bind(this);
@@ -50,18 +62,21 @@ export class Game {
         // Calculate delta time
         const deltaTime = (currentTime - this.lastTime) / 1000; // in seconds
         this.lastTime = currentTime;
+        
+        // Limit delta time to avoid large jumps
+        const cappedDeltaTime = Math.min(deltaTime, 0.1);
 
         // Process inputs
         const inputs = this.inputHandler.getInputs();
 
-        // Update camera based on inputs
-        if (inputs.arrowUp) this.sceneManager.moveCamera('forward', deltaTime);
-        if (inputs.arrowDown) this.sceneManager.moveCamera('backward', deltaTime);
-        if (inputs.arrowLeft) this.sceneManager.moveCamera('left', deltaTime);
-        if (inputs.arrowRight) this.sceneManager.moveCamera('right', deltaTime);
+        // Update player
+        this.player.update(cappedDeltaTime, inputs);
+        
+        // Update camera to follow player
+        this.sceneManager.updateCameraFollow(this.player.position, this.player.speed, cappedDeltaTime);
 
         // Update scene
-        this.sceneManager.update(deltaTime);
+        this.sceneManager.update(cappedDeltaTime);
 
         // Continue animation loop
         requestAnimationFrame(this.animate);

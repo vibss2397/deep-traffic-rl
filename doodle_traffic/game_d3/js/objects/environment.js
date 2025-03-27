@@ -20,10 +20,10 @@ export function createEnvironment() {
 }
 
 function createGround() {
-    // Create a large ground plane beyond the road
-    const groundGeometry = new THREE.PlaneGeometry(50, 150);
+    // Create a large ground plane beyond the road - make it longer to match the road
+    const groundGeometry = new THREE.PlaneGeometry(50, 250);
     const groundMaterial = new THREE.MeshStandardMaterial({ 
-        color: 0xdddddd,
+        color: 0xf0f0f0,  // Lighter color to better match the notebook paper
         roughness: 1.0,
         metalness: 0.0
     });
@@ -37,9 +37,10 @@ function createGround() {
 }
 
 function addDecorativeElements(envGroup) {
-    // Add simple placeholder objects for now
-    // These will be replaced with more thematic elements in later phases
+    // This function is now empty - decorative elements will be added in later phases
+    // You can uncomment the code below when you're ready to add decorations
     
+    /*
     // Create some "pencil" markers along the sides (just cylinders for now)
     const pencilGeometry = new THREE.CylinderGeometry(0.1, 0.1, 1.5, 8);
     const pencilMaterial = new THREE.MeshStandardMaterial({ color: 0xffff00 });
@@ -75,4 +76,5 @@ function addDecorativeElements(envGroup) {
         eraser.castShadow = true;
         envGroup.add(eraser);
     }
+    */
 }

@@ -9,8 +9,8 @@ export function createRoad() {
     // Get notebook paper texture
     const notebookTexture = createNotebookTexture();
     
-    // Create the main road surface
-    const roadGeometry = new THREE.PlaneGeometry(5, 100, 10, 20);
+    // Create the main road surface - make it longer to see further ahead
+    const roadGeometry = new THREE.PlaneGeometry(5, 200, 10, 20);
     const roadMaterial = new THREE.MeshStandardMaterial({
         map: notebookTexture,
         side: THREE.DoubleSide,

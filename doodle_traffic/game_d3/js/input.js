@@ -23,7 +23,7 @@ export class InputHandler {
         // Add event listeners
         document.addEventListener('keydown', this.onKeyDown);
         document.addEventListener('keyup', this.onKeyUp);
-        console.log('Input handler initialized');
+        console.log('Input handler initialized - press WASD or arrow keys to move the car');
     }
 
     destroy() {
