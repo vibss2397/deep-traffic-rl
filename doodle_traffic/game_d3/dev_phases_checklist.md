@@ -6,22 +6,22 @@
 - [x] Create a simple two-lane road with notebook paper texture
 - [x] Add basic lighting
 - [x] Implement a simple keyboard input system
-- [ ] Refine camera angle to 30-45° perspective for optimal view
+- [x] Refine camera angle to 30-45° perspective for optimal view
 - [x] Set up modular file structure for the project
 
 ## Phase 2: Player Car & Movement
 - [x] Create a simple doodle car model
 - [x] Implement lane-changing mechanics (A/D keys)
 - [x] Add speed control (W/S keys)
-- [ ] Implement car physics (momentum, tilting on turns)
+- [x] Implement car physics (momentum, tilting on turns)
 - [x] Add camera follow behavior
-- [ ] Create basic collision boundary for the car
+- [~] Create basic collision boundary for the car
 
 ## Phase 3: Scrolling World & Road Generation
-- [ ] Implement road segment generation system
-- [ ] Create scrolling mechanism to move the world past the player
-- [ ] Develop segment types (straight, left turn, right turn)
-- [ ] Implement basic road segment recycling for performance
+- [x] Implement road segment generation system
+- [x] Create scrolling mechanism to move the world past the player
+- [~] Develop segment types (straight, left turn, right turn)
+- [~] Implement basic road segment recycling for performance
 - [ ] Add distance tracking for scoring
 - [ ] Extend notebook paper background beyond the road
 - [ ] Add subtle paper elements (edge tears, binding holes)

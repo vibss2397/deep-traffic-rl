@@ -16,11 +16,11 @@ export class Player {
         this.isChangingLane = false;
         
         // Speed properties
-        this.speed = 0;
-        this.maxSpeed = 20;
-        this.minSpeed = 0;
-        this.acceleration = 10;
-        this.deceleration = 15;
+        this.speed = 5;               // Initial speed is non-zero to get things moving
+        this.maxSpeed = 20;           // Maximum speed limit
+        this.minSpeed = 0;            // Minimum speed (no reverse)
+        this.acceleration = 15;       // Increased acceleration for responsiveness
+        this.deceleration = 20;       // Increased deceleration for responsiveness
         
         // Create the mesh
         this.mesh = this.createCarMesh();
@@ -39,6 +39,9 @@ export class Player {
         
         // Debug visualization for collision box - create separately
         this.debugCollider = this.createColliderMesh();
+        
+        // Debug text for displaying speed
+        this.debugSpeed = 0;
         
         console.log("Player car created at position:", this.position);
     }
@@ -203,11 +206,27 @@ export class Player {
     }
     
     update(deltaTime, inputs) {
+        // Log inputs for debugging
+        if (inputs.keyW || inputs.arrowUp) {
+            console.log("Accelerating - W/Up pressed");
+        }
+        if (inputs.keyS || inputs.arrowDown) {
+            console.log("Braking - S/Down pressed");
+        }
+        
         // Handle lane changes
         this.handleLaneChange(deltaTime, inputs);
         
+        // Store previous speed for debugging
+        this.debugSpeed = this.speed;
+        
         // Handle speed changes
         this.handleSpeedChange(deltaTime, inputs);
+        
+        // Log if speed changed
+        if (this.speed !== this.debugSpeed) {
+            console.log("Speed changed from", this.debugSpeed, "to", this.speed);
+        }
         
         // Apply car tilt based on movement
         this.applyCarTilt();
@@ -294,8 +313,8 @@ export class Player {
             }
         }
         
-        // Apply momentum (speed changes gradually)
-        this.speed = previousSpeed * 0.9 + this.speed * 0.1;
+        // Reduced momentum effect for more responsive controls
+        this.speed = previousSpeed * 0.7 + this.speed * 0.3;
         
         // Visual effect: car tilts forward slightly when accelerating
         if (this.speed > previousSpeed && !this.isChangingLane) {
