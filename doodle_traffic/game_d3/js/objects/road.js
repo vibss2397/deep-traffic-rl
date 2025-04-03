@@ -2,35 +2,51 @@
 import * as THREE from 'three';
 import { createNotebookTexture, createSketchyTexture } from '../utils/texture-generator.js';
 import { RoadSegmentManager, SegmentType } from '../road-segment-system.js';
+import { RoadDrawingSystem } from '../road-drawing-system.js';
 
-let roadSegmentManager = null;
+// let roadSegmentManager = null;
+let roadDrawingSystem = null;
 
 export function createRoad(scene) {
     // Create a group to hold all road components
     const roadGroup = new THREE.Group();
     
     // Initialize the road segment manager
-    roadSegmentManager = new RoadSegmentManager(scene);
-    roadSegmentManager.init();
+    // roadSegmentManager = new RoadSegmentManager(scene);
+    // roadSegmentManager.init();
     
     // Get the road segments and add them to the road group
-    const segments = roadSegmentManager.activeSegments;
-    segments.forEach(segment => {
-        roadGroup.add(segment);
-    });
+    // const segments = roadSegmentManager.activeSegments;
+    // segments.forEach(segment => {
+    //     roadGroup.add(segment);
+    // });
     
     // Store a reference to the segment manager in the road group
-    roadGroup.userData.roadSegmentManager = roadSegmentManager;
+    // roadGroup.userData.roadSegmentManager = roadSegmentManager;
     
+    // Initialize the road drawing system instead of segment manager
+    roadDrawingSystem = new RoadDrawingSystem(scene);
+    roadDrawingSystem.init();
+
+    // Store a reference to the drawing system in the road group
+    roadGroup.userData.roadDrawingSystem = roadDrawingSystem;
+
     return roadGroup;
 }
 
 // Update the road based on player position
-export function updateRoad(playerZ) {
-    if (roadSegmentManager) {
-        roadSegmentManager.update(playerZ);
+// export function updateRoad(playerZ) {
+//     if (roadSegmentManager) {
+//         roadSegmentManager.update(playerZ);
+//     }
+// }
+export function updateRoad(playerZ, deltaTime) {
+    if (roadDrawingSystem) {
+        roadDrawingSystem.update(playerZ, deltaTime);
+        // roadDrawingSystem.updateAnimations(deltaTime);
     }
 }
+
 
 // Get scrollable textures for the road
 export function getRoadScrollableTextures() {

@@ -15,7 +15,7 @@
 - [x] Add speed control (W/S keys)
 - [x] Implement car physics (momentum, tilting on turns)
 - [x] Add camera follow behavior
-- [~] Create basic collision boundary for the car
+- [x] Create basic collision boundary for the car
 
 ## Phase 3: Scrolling World & Road Generation
 - [x] Implement road segment generation system

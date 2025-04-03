@@ -82,8 +82,9 @@ export class SceneManager {
         this.road = createRoad(this.scene);
         this.scene.add(this.road);
         
-        // Register road for scrolling
-        this.registerScrollObject(this.road);
+        //--- Commenting this out as google thinnks this is problematic ---
+        //  Register road for scrolling
+        //this.registerScrollObject(this.road);
         
         // Find and register all scrollable textures
         this.collectScrollableTextures();
@@ -173,7 +174,7 @@ export class SceneManager {
     update(deltaTime) {
         // Update the road segments based on player position
         if (this.playerPosition) {
-            this.updateRoad(this.playerPosition.z);
+            this.updateRoad(this.playerPosition.z, deltaTime);
         }
         
         // Update controls
@@ -182,16 +183,19 @@ export class SceneManager {
         // Render scene
         this.renderer.render(this.scene, this.camera);
     }
-    
+
     // Updated road method to ensure segments are updated
-    updateRoad(playerZ) {
-        if (this.road && this.road.userData && this.road.userData.roadSegmentManager) {
-            this.road.userData.roadSegmentManager.update(playerZ);
-        } else {
-            // Fall back to the global function
-            updateRoad(playerZ);
-        }
+    updateRoad(playerZ, deltaTime) {
+        if (this.road && this.road.userData && this.road.userData.roadDrawingSystem) {
+            this.road.userData.roadDrawingSystem.update(playerZ, deltaTime);
+            // this.road.userData.roadDrawingSystem.updateAnimations(deltaTime);
+        } 
+        // else {
+        //     // Fall back to the global function
+        //     updateRoad(playerZ, deltaTime);
+        // }
     }
+    
     
     // Register an object to be affected by scrolling
     registerScrollObject(object) {
@@ -364,12 +368,13 @@ export class SceneManager {
         this.playerPosition.y = targetPosition.y;
         this.playerPosition.z = targetPosition.z;
         
-        // Only update road when player has moved a significant amount
-        const distanceMoved = Math.abs(this.playerPosition.z - this.lastPlayerPosition.z);
-        if (distanceMoved > this.roadUpdateThreshold) {
-            this.updateRoad(this.playerPosition.z);
-            this.lastPlayerPosition = {...this.playerPosition};
-        }
+        // Commenting this out as google thinnks this is problematic ----
+        // // Only update road when player has moved a significant amount
+        // const distanceMoved = Math.abs(this.playerPosition.z - this.lastPlayerPosition.z);
+        // if (distanceMoved > this.roadUpdateThreshold) {
+        //     this.updateRoad(this.playerPosition.z, deltaTime);
+        //     this.lastPlayerPosition = {...this.playerPosition};
+        // }
         
         // Use the VISUAL position of the car (this.cameraTarget.position) for camera placement
         // This ensures the camera follows what the player sees, not the absolute position
