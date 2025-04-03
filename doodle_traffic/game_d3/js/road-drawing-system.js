@@ -15,7 +15,7 @@ export class RoadDrawingSystem {
         // Configuration
         this.segmentLength = 40;     // Length of each segment
         this.roadWidth = 5;          // Width of the road
-        this.visibleSegments = 8;    // How many segments to show ahead (including flying-in)
+        this.visibleSegments = 3;    // How many segments to show ahead (including flying-in)
         this.segmentsBehind = 4;     // How many segments to keep behind
         
         // Animation parameters
@@ -34,6 +34,10 @@ export class RoadDrawingSystem {
         
         // Debug mode
         this.debug = true;
+
+        this.zAtLastGeneration = 0; // Or initialize to starting player Z in init()
+        this.minSpeedForGeneration = 1.0; // Minimum speed for segment generation
+
     }
     
     init() {
@@ -448,16 +452,17 @@ export class RoadDrawingSystem {
     
     
     // Update system based on player position
-    update(playerZ, deltaTime) {
+    update(playerZ, playerSpeed, deltaTime) {
         const currentTime = performance.now() / 1000;
-        const removalThresholdZ = playerZ - (this.segmentsBehind * this.segmentLength);
-
+        const removalThresholdZ = playerZ + (this.segmentsBehind * this.segmentLength);
+        console.log(`>>>>>>>>>> Removal Threshold Z: ${removalThresholdZ.toFixed(2)}, playerZ=${playerZ.toFixed(2)}, segmentsBehind=${this.segmentsBehind.toFixed(2)}, segmentLength=${this.segmentLength.toFixed(2)}`);
         // Check if we need to remove old segments behind
         if (this.segments.length > 0) {
             // Keep removing segments that are too far behind the player
             while (this.segments.length > this.visibleSegments + this.segmentsBehind && // Ensure we don't remove too many
-                this.segments[0].position.z < removalThresholdZ)
+                this.segments[0].position.z > removalThresholdZ)
             {
+                console.log(`✅ REMOVING segment at Z=${this.segments[0].position.z.toFixed(2)} (PlayerZ=${playerZ.toFixed(2)}, RemovalThresholdZ=${removalThresholdZ.toFixed(2)})`);
                 const oldSegment = this.segments.shift();
                 
                 // Move to pool for recycling
@@ -476,14 +481,33 @@ export class RoadDrawingSystem {
             const lastSegmentEndZ = lastSegment.position.z - this.segmentLength; // Middle of last segment approx end
             // OR more simply: just check segment origin Z
             // const lastSegmentEndZ = lastSegment.position.z;
-    
             const generationHorizonZ = playerZ - (this.visibleSegments - 1) * this.segmentLength;
+
+            // Condition 1: Is player moving fast enough?
+            const isFastEnough = playerSpeed > this.minSpeedForGeneration;
+
+            // Condition 2: Is the current last segment beyond the horizon?
+            const needsMoreSegmentsPositional = lastSegment.position.z > generationHorizonZ;
+
+             // --- Condition 3: Has player entered a new segment zone since last generation? ---
+            const currentSegmentZoneIndex = Math.floor(Math.abs(playerZ / this.segmentLength));
+            const lastGenSegmentZoneIndex = Math.floor(Math.abs(this.zAtLastGeneration / this.segmentLength));
+            const hasEnteredNewSegmentZone = currentSegmentZoneIndex !== lastGenSegmentZoneIndex;
+            // ---
+    
             // Corrected condition: Generate if last segment Z is 'behind' (greater Z) the horizon
-            const shouldGenerate = lastSegment.position.z < generationHorizonZ;
+            // const shouldGenerate = lastSegment.position.z < generationHorizonZ;
+
+            // Combine all conditions
+            const shouldGenerate = isFastEnough && needsMoreSegmentsPositional && hasEnteredNewSegmentZone;
             console.log(`>>> ShouldGenerate: ${shouldGenerate} ` +
                         `lastSegment.pos.z=${lastSegment.position.z.toFixed(2)}, ` +
                         `horizonZ=${generationHorizonZ.toFixed(2)} 
-                        playerZ=${playerZ.toFixed(2)}`);
+                        playerZ=${playerZ.toFixed(2)}
+                        playerSpeed=${playerSpeed.toFixed(2)}
+                        isFastEnough=${isFastEnough}
+                        needsMoreSegmentsPositional=${needsMoreSegmentsPositional}
+                        hasEnteredNewSegmentZone=${hasEnteredNewSegmentZone}`);
     
             // Log the check values
             // console.log(`Update Check: playerZ=${playerZ.toFixed(2)}, ` +
@@ -494,8 +518,15 @@ export class RoadDrawingSystem {
     
     
             if (shouldGenerate) {
-                 console.log(">>> Condition Met - Calling generateNextSegment() <<<");
-                 this.generateNextSegment();
+                console.log(">>> Condition Met - Calling generateNextSegment() <<<");
+                const newSegment = this.generateNextSegment();
+
+                 // Update Z tracker *only* after successful generation
+                if (newSegment) {
+                    this.zAtLastGeneration = playerZ;
+                    // If using totalSegmentsGenerated counter (alternative GPS), increment here:
+                    // this.totalSegmentsGenerated++;
+                }
             }
     
         }

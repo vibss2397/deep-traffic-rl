@@ -145,7 +145,7 @@ export class Game {
         }
     
         // Update scene
-        this.sceneManager.update(cappedDeltaTime);
+        this.sceneManager.update(this.player.speed, cappedDeltaTime);
         
         // Update debug UI
         this.debugUI.update(cappedDeltaTime, inputs);

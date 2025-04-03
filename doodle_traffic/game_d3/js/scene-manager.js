@@ -97,7 +97,7 @@ export class SceneManager {
         this.registerScrollObject(this.environment);
         
         // Add fog for depth perception and sense of distance
-        this.scene.fog = new THREE.Fog(0xf0f0f0, 30, 100);
+        this.scene.fog = new THREE.Fog(0xf0f0f0, 100, 400);
 
         console.log('Scene manager initialized');
     }
@@ -171,23 +171,26 @@ export class SceneManager {
         this.scene.add(fillLight);
     }
 
-    update(deltaTime) {
+    update(playerSpeed, deltaTime) {
         // Update the road segments based on player position
         if (this.playerPosition) {
-            this.updateRoad(this.playerPosition.z, deltaTime);
+            this.updateRoad(this.playerPosition.z, playerSpeed, deltaTime);
         }
         
         // Update controls
-        this.controls.update();
+        if (this.controls && this.controls.enabled) {
+            this.controls.update();
+        }
 
         // Render scene
         this.renderer.render(this.scene, this.camera);
     }
 
     // Updated road method to ensure segments are updated
-    updateRoad(playerZ, deltaTime) {
+    updateRoad(playerZ, playerSpeed, deltaTime) {
+
         if (this.road && this.road.userData && this.road.userData.roadDrawingSystem) {
-            this.road.userData.roadDrawingSystem.update(playerZ, deltaTime);
+            this.road.userData.roadDrawingSystem.update(playerZ, playerSpeed, deltaTime);
             // this.road.userData.roadDrawingSystem.updateAnimations(deltaTime);
         } 
         // else {
@@ -288,31 +291,6 @@ export class SceneManager {
         this.renderer.setSize(window.innerWidth, window.innerHeight);
     }
 
-    moveCamera(direction, deltaTime) {
-        const speed = this.cameraSpeed * deltaTime;
-
-        switch(direction) {
-            case 'forward':
-                this.camera.position.z -= speed;
-                break;
-            case 'backward':
-                this.camera.position.z += speed;
-                break;
-            case 'left':
-                this.camera.position.x -= speed;
-                break;
-            case 'right':
-                this.camera.position.x += speed;
-                break;
-        }
-
-        // Update the controls target to match the new camera position in the xz plane
-        // but keep looking at a point in front of and below the camera
-        this.controls.target.x = this.camera.position.x;
-        this.controls.target.y = 0; // Keep focus on the ground level
-        this.controls.target.z = this.camera.position.z - 10; // Look further ahead for better visibility
-    }
-
     // Add an object to the scene
     addToScene(object) {
         if (this.scene) {
@@ -362,7 +340,7 @@ export class SceneManager {
     // Update camera position to follow the target with new POV angle
     updateCameraFollow(targetPosition, speed, deltaTime) {
         if (!this.cameraTarget) return;
-        
+
         // Store the player position for road segment updates
         this.playerPosition.x = targetPosition.x;
         this.playerPosition.y = targetPosition.y;
@@ -382,7 +360,7 @@ export class SceneManager {
         // Calculate position directly behind and above the car's VISUAL position
         const heightOffset = Math.sin(this.cameraAngle) * this.cameraDistance;
         const backOffset = Math.cos(this.cameraAngle) * this.cameraDistance;
-        
+
         // Position camera behind and above player's visual position
         const idealCameraPos = {
             x: this.cameraTarget.position.x,
@@ -400,9 +378,10 @@ export class SceneManager {
         idealCameraPos.x += lateralOffset;
         
         // Smoothly move camera toward ideal position
-        this.camera.position.x = this.camera.position.x * 0.92 + idealCameraPos.x * 0.08;
-        this.camera.position.y = this.camera.position.y * 0.92 + idealCameraPos.y * 0.08;
-        this.camera.position.z = this.camera.position.z * 0.92 + idealCameraPos.z * 0.08;
+        // this.camera.position.x = this.camera.position.x * 0.92 + idealCameraPos.x * 0.08;
+        // this.camera.position.y = this.camera.position.y * 0.92 + idealCameraPos.y * 0.08;
+        // this.camera.position.z = this.camera.position.z * 0.92 + idealCameraPos.z * 0.08;
+        this.camera.position.set(idealCameraPos.x, idealCameraPos.y, idealCameraPos.z);
         
         // Make camera look ahead of the player's VISUAL position
         const lookAtPos = {

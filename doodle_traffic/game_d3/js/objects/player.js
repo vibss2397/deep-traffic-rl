@@ -228,6 +228,9 @@ export class Player {
             console.log("Speed changed from", this.debugSpeed, "to", this.speed);
         }
         
+        // Update player position based on speed
+        this.position.z -= this.speed * deltaTime;
+
         // Apply car tilt based on movement
         this.applyCarTilt();
         
