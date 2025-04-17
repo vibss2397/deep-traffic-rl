@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createRoad, updateRoad } from './objects/road.js';
-import { createEnvironment } from './objects/environment.js';
+import { createEnvironment, updateGroundSegments, updateEnvironmentElements } from './objects/environment.js';
 
 export class SceneManager {
     constructor() {
@@ -174,7 +174,7 @@ export class SceneManager {
     update(playerSpeed, deltaTime) {
         // Update the road segments based on player position
         if (this.playerPosition) {
-            this.updateRoad(this.playerPosition.z, playerSpeed, deltaTime);
+            updateRoad(this.playerPosition.z, playerSpeed, deltaTime);
         }
         
         // Update controls
@@ -185,20 +185,6 @@ export class SceneManager {
         // Render scene
         this.renderer.render(this.scene, this.camera);
     }
-
-    // Updated road method to ensure segments are updated
-    updateRoad(playerZ, playerSpeed, deltaTime) {
-
-        if (this.road && this.road.userData && this.road.userData.roadDrawingSystem) {
-            this.road.userData.roadDrawingSystem.update(playerZ, playerSpeed, deltaTime);
-            // this.road.userData.roadDrawingSystem.updateAnimations(deltaTime);
-        } 
-        // else {
-        //     // Fall back to the global function
-        //     updateRoad(playerZ, deltaTime);
-        // }
-    }
-    
     
     // Register an object to be affected by scrolling
     registerScrollObject(object) {
@@ -340,19 +326,25 @@ export class SceneManager {
     // Update camera position to follow the target with new POV angle
     updateCameraFollow(targetPosition, speed, deltaTime) {
         if (!this.cameraTarget) return;
-
+        
         // Store the player position for road segment updates
         this.playerPosition.x = targetPosition.x;
         this.playerPosition.y = targetPosition.y;
         this.playerPosition.z = targetPosition.z;
         
-        // Commenting this out as google thinnks this is problematic ----
-        // // Only update road when player has moved a significant amount
-        // const distanceMoved = Math.abs(this.playerPosition.z - this.lastPlayerPosition.z);
-        // if (distanceMoved > this.roadUpdateThreshold) {
-        //     this.updateRoad(this.playerPosition.z, deltaTime);
-        //     this.lastPlayerPosition = {...this.playerPosition};
-        // }
+        // Only update road when player has moved a significant amount
+        const distanceMoved = Math.abs(this.playerPosition.z - this.lastPlayerPosition.z);
+        if (distanceMoved > this.roadUpdateThreshold) {
+            updateRoad(this.playerPosition.z, speed, deltaTime);
+            
+            // Update environment with player position
+            if (this.environment) {
+                updateGroundSegments(this.environment, this.playerPosition.z);
+                updateEnvironmentElements(this.environment, this.playerPosition.z);
+            }
+            
+            this.lastPlayerPosition = {...this.playerPosition};
+        }
         
         // Use the VISUAL position of the car (this.cameraTarget.position) for camera placement
         // This ensures the camera follows what the player sees, not the absolute position
@@ -360,7 +352,7 @@ export class SceneManager {
         // Calculate position directly behind and above the car's VISUAL position
         const heightOffset = Math.sin(this.cameraAngle) * this.cameraDistance;
         const backOffset = Math.cos(this.cameraAngle) * this.cameraDistance;
-
+        
         // Position camera behind and above player's visual position
         const idealCameraPos = {
             x: this.cameraTarget.position.x,
@@ -378,10 +370,9 @@ export class SceneManager {
         idealCameraPos.x += lateralOffset;
         
         // Smoothly move camera toward ideal position
-        // this.camera.position.x = this.camera.position.x * 0.92 + idealCameraPos.x * 0.08;
-        // this.camera.position.y = this.camera.position.y * 0.92 + idealCameraPos.y * 0.08;
-        // this.camera.position.z = this.camera.position.z * 0.92 + idealCameraPos.z * 0.08;
-        this.camera.position.set(idealCameraPos.x, idealCameraPos.y, idealCameraPos.z);
+        this.camera.position.x = this.camera.position.x * 0.92 + idealCameraPos.x * 0.08;
+        this.camera.position.y = this.camera.position.y * 0.92 + idealCameraPos.y * 0.08;
+        this.camera.position.z = this.camera.position.z * 0.92 + idealCameraPos.z * 0.08;
         
         // Make camera look ahead of the player's VISUAL position
         const lookAtPos = {
@@ -394,4 +385,4 @@ export class SceneManager {
         const lookAtVector = new THREE.Vector3(lookAtPos.x, lookAtPos.y, lookAtPos.z);
         this.camera.lookAt(lookAtVector);
     }
-}
+    }

@@ -6,9 +6,8 @@ export function createEnvironment() {
     // Create a group to hold all environment elements
     const envGroup = new THREE.Group();
     
-    // Add ground plane
-    const ground = createGround();
-    envGroup.add(ground);
+    // Add ground plane segments
+    addGroundSegments(envGroup);
     
     // Add decorative elements along the sides
     addDecorativeElements(envGroup);
@@ -18,6 +17,102 @@ export function createEnvironment() {
     
     return envGroup;
 }
+
+function addGroundSegments(envGroup) {
+    // Create multiple ground segments that can be reused
+    const segmentLength = 250;
+    const segmentWidth = 100;
+    const segmentsCount = 6; // More segments for better coverage
+    
+    // Get notebook paper texture for the ground
+    const groundTexture = createDottedGridTexture();
+    groundTexture.repeat.set(10, 25);
+    
+    // Create material with custom shader to allow for fading at the edges
+    const groundMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0xf5f5f5,
+        roughness: 1.0,
+        metalness: 0.0,
+        map: groundTexture,
+        transparent: true,
+        side: THREE.DoubleSide
+    });
+    
+    // Create segments
+    for (let i = 0; i < segmentsCount; i++) {
+        const groundGeometry = new THREE.PlaneGeometry(segmentWidth, segmentLength);
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        
+        // Position segments in a chain
+        ground.rotation.x = -Math.PI / 2;  // Rotate to lay flat
+        ground.position.y = -0.1;          // Slightly below the road
+        ground.position.z = -(i * segmentLength) + (segmentLength/2);
+        
+        // Mark for recycling
+        ground.userData.isGroundSegment = true;
+        ground.userData.segmentIndex = i;
+        ground.userData.initialZ = ground.position.z;
+        
+        ground.receiveShadow = true;
+        envGroup.add(ground);
+    }
+}
+
+// Function to update and recycle ground segments
+export function updateGroundSegments(envGroup, playerZ) {
+    if (!envGroup) return;
+    
+    const segmentLength = 250;
+    const visibleRange = 500; // How far ahead/behind to keep segments
+    
+    envGroup.traverse((child) => {
+        if (child.userData && child.userData.isGroundSegment) {
+            // Check if this segment is too far behind the player
+            const segmentEndZ = child.position.z + segmentLength/2;
+            
+            if (segmentEndZ < playerZ - visibleRange) {
+                // Move this segment ahead of the farthest one
+                const farthestZ = findFarthestSegmentZ(envGroup);
+                child.position.z = farthestZ + segmentLength;
+            }
+        }
+    });
+}
+
+// Find the farthest forward segment
+function findFarthestSegmentZ(envGroup) {
+    let farthestZ = -Infinity;
+    
+    envGroup.traverse((child) => {
+        if (child.userData && child.userData.isGroundSegment) {
+            const endZ = child.position.z + 125; // half segment length
+            if (endZ > farthestZ) {
+                farthestZ = endZ;
+            }
+        }
+    });
+    
+    return farthestZ;
+}
+
+// Function to update environment decorations
+export function updateEnvironmentElements(envGroup, playerZ) {
+    if (!envGroup) return;
+    
+    const visibleRange = 500;
+    const recycleDistance = 1000; // When to move elements forward
+    
+    envGroup.traverse((child) => {
+        if (child.userData && child.userData.isEnvironmentElement) {
+            // If element is too far behind player, move it ahead
+            if (child.position.z < playerZ - visibleRange) {
+                // Move forward by recycleDistance
+                child.position.z += recycleDistance;
+            }
+        }
+    });
+}
+
 
 function createGround() {
     // Create a large ground plane beyond the road - make it longer to match the road
@@ -80,6 +175,9 @@ function addDecorativeElements(envGroup) {
         pencilLeft.rotation.x = Math.random() * 0.2 - 0.1;  // Slight random tilt
         pencilLeft.rotation.y = Math.random() * 0.4 - 0.2;  // Slight random rotation
         
+        pencilLeft.userData.isEnvironmentElement = true;
+        pencilLeft.userData.initialZ = offsetZ;
+
         pencilLeft.traverse(child => {
             if (child.isMesh) {
                 child.castShadow = true;
@@ -109,6 +207,9 @@ function addDecorativeElements(envGroup) {
             pencilRight.rotation.x = Math.random() * 0.2 - 0.1;  // Slight random tilt
             pencilRight.rotation.y = Math.random() * 0.4 - 0.2;  // Slight random rotation
             
+            pencilRight.userData.isEnvironmentElement = true;
+            pencilRight.userData.initialZ = offsetZ;
+
             pencilRight.traverse(child => {
                 if (child.isMesh) {
                     child.castShadow = true;
@@ -141,6 +242,8 @@ function addDecorativeElements(envGroup) {
             eraser.rotation.z = Math.random() * 0.1;  // Slight tilt
             eraser.castShadow = true;
             eraser.userData.isRoadMarking = true;  // Make it move with road
+            eraser.userData.isEnvironmentElement = true;
+            eraser.userData.initialZ = offsetZ;
             envGroup.add(eraser);
         }
         
@@ -155,6 +258,8 @@ function addDecorativeElements(envGroup) {
             eraser.rotation.z = Math.random() * 0.1;  // Slight tilt
             eraser.castShadow = true;
             eraser.userData.isRoadMarking = true;  // Make it move with road
+            eraser.userData.isEnvironmentElement = true;
+            eraser.userData.initialZ = offsetZ;
             envGroup.add(eraser);
         }
     }
@@ -195,6 +300,8 @@ function addDecorativeElements(envGroup) {
         paperClip.rotation.z = Math.random() * Math.PI;  // Random rotation
         paperClip.castShadow = true;
         paperClip.userData.isRoadMarking = true;  // Make it move with road
+        paperClip.userData.isEnvironmentElement = true;
+        paperClip.userData.initialZ = offsetZ;
         envGroup.add(paperClip);
     }
 }
@@ -202,49 +309,57 @@ function addDecorativeElements(envGroup) {
 function addPaperElements(envGroup) {
     // Add binding holes along the left edge of the "paper"
     const holeGeometry = new THREE.CircleGeometry(0.8, 16);
-    const holeMaterial = new THREE.MeshBasicMaterial({ color: 0xf0f0f0 });  // Same as background
+    const holeMaterial = new THREE.MeshBasicMaterial({ color: 0xf0f0f0 }); // Same as background
     
-    // Position holes along the left margin
-    for (let z = -90; z <= 90; z += 20) {
+    // Position holes along the left margin with extended range
+    for (let z = -250; z <= 250; z += 20) { // Extended z-range
         const hole = new THREE.Mesh(holeGeometry, holeMaterial);
-        hole.position.set(-20, 0.01, z);  // Place along the left edge
-        hole.rotation.x = -Math.PI / 2;  // Lay flat
-        hole.userData.isRoadMarking = true;  // Make it move with road
+        hole.position.set(-20, 0.01, z); // Place along the left edge
+        hole.rotation.x = -Math.PI / 2; // Lay flat
+        
+        // Tag for recycling
+        hole.userData.isEnvironmentElement = true; // Changed from isRoadMarking
+        hole.userData.initialZ = z;
+        
         envGroup.add(hole);
     }
     
     // Add a few "coffee stains" to the paper
     const stainGeometry = new THREE.CircleGeometry(2 + Math.random() * 2, 32);
     const stainMaterial = new THREE.MeshStandardMaterial({
-        color: 0xaa7744,  // Coffee color
+        color: 0xaa7744, // Coffee color
         transparent: true,
         opacity: 0.3,
         roughness: 1.0,
         metalness: 0.0
     });
     
-    // Add a few random coffee stains
-    for (let i = 0; i < 3; i++) {
+    // Add more coffee stains with extended range
+    for (let i = 0; i < 10; i++) { // More stains
         const stain = new THREE.Mesh(stainGeometry, stainMaterial);
-        const side = Math.random() > 0.5 ? 1 : -1;  // Randomly choose side
-        const offsetX = side * (12 + Math.random() * 8);  // Position away from the road
-        const offsetZ = -70 + i * 60 + Math.random() * 20;  // Space them out
+        const side = Math.random() > 0.5 ? 1 : -1; // Randomly choose side
+        const offsetX = side * (12 + Math.random() * 8); // Position away from the road
+        const offsetZ = -300 + i * 60 + Math.random() * 40; // Extended range
         
-        stain.position.set(offsetX, 0.02, offsetZ);  // Just above the ground
-        stain.rotation.x = -Math.PI / 2;  // Lay flat
-        stain.userData.isRoadMarking = true;  // Make it move with road
+        stain.position.set(offsetX, 0.02, offsetZ); // Just above the ground
+        stain.rotation.x = -Math.PI / 2; // Lay flat
+        
+        // Tag for recycling
+        stain.userData.isEnvironmentElement = true; // Changed from isRoadMarking
+        stain.userData.initialZ = offsetZ;
+        
         envGroup.add(stain);
     }
     
     // Add "paper tears" along the edges for a more organic look
     const tearMaterial = new THREE.MeshStandardMaterial({
-        color: 0xf8f8f8,  // Slightly whiter than the ground
+        color: 0xf8f8f8, // Slightly whiter than the ground
         roughness: 0.9,
         metalness: 0.1
     });
     
-    // Create tears along the right edge
-    for (let z = -100; z <= 100; z += 20) {
+    // Create tears along the right edge with extended range
+    for (let z = -250; z <= 250; z += 20) { // Extended z-range
         // Only add tears sometimes for a natural look
         if (Math.random() > 0.6) {
             // Create a random shape for the tear
@@ -268,9 +383,13 @@ function addPaperElements(envGroup) {
             const tearGeometry = new THREE.ShapeGeometry(tearShape);
             const tear = new THREE.Mesh(tearGeometry, tearMaterial);
             
-            tear.position.set(40, 0.03, z);  // Right edge of "paper"
-            tear.rotation.x = -Math.PI / 2;  // Lay flat
-            tear.userData.isRoadMarking = true;  // Make it move with road
+            tear.position.set(40, 0.03, z); // Right edge of "paper"
+            tear.rotation.x = -Math.PI / 2; // Lay flat
+            
+            // Tag for recycling
+            tear.userData.isEnvironmentElement = true; // Changed from isRoadMarking
+            tear.userData.initialZ = z;
+            
             envGroup.add(tear);
         }
     }
