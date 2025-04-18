@@ -255,7 +255,7 @@ export class SceneManager {
         this.scrollObjects.forEach(object => {
             // For objects that need to be physically moved (road markings, obstacles, etc.)
             object.traverse((child) => {
-                if (child.isMesh && child.userData.isRoadMarking) {
+                if (child.isMesh && (child.userData.isRoadMarking || child.userData.isEnvironmentElement)) {
                     // Move the object forward (increasing Z)
                     child.position.z += scrollAmount;
                     
@@ -385,4 +385,4 @@ export class SceneManager {
         const lookAtVector = new THREE.Vector3(lookAtPos.x, lookAtPos.y, lookAtPos.z);
         this.camera.lookAt(lookAtVector);
     }
-    }
+}

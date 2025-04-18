@@ -63,17 +63,19 @@ export function updateGroundSegments(envGroup, playerZ) {
     if (!envGroup) return;
     
     const segmentLength = 250;
-    const visibleRange = 500; // How far ahead/behind to keep segments
+    const visibleRange = 750; // Increased from 500 to account for longer segments
     
     envGroup.traverse((child) => {
-        if (child.userData && child.userData.isGroundSegment) {
-            // Check if this segment is too far behind the player
-            const segmentEndZ = child.position.z + segmentLength/2;
+        if (child.userData?.isGroundSegment) {
+            // Get the segment's end position (center Z + half length)
+            const segmentEndZ = child.position.z + (segmentLength/2);
             
+            // Check if this segment is behind the visible range
             if (segmentEndZ < playerZ - visibleRange) {
                 // Move this segment ahead of the farthest one
                 const farthestZ = findFarthestSegmentZ(envGroup);
-                child.position.z = farthestZ + segmentLength;
+                // Position new segment at the end of farthest segment
+                child.position.z = farthestZ + (segmentLength/2); 
             }
         }
     });
@@ -84,8 +86,9 @@ function findFarthestSegmentZ(envGroup) {
     let farthestZ = -Infinity;
     
     envGroup.traverse((child) => {
-        if (child.userData && child.userData.isGroundSegment) {
-            const endZ = child.position.z + 125; // half segment length
+        if (child.userData?.isGroundSegment) {
+            // Get the END position of the segment (center Z + half length)
+            const endZ = child.position.z + (250/2);
             if (endZ > farthestZ) {
                 farthestZ = endZ;
             }
@@ -97,17 +100,22 @@ function findFarthestSegmentZ(envGroup) {
 
 // Function to update environment decorations
 export function updateEnvironmentElements(envGroup, playerZ) {
-    if (!envGroup) return;
-    
-    const visibleRange = 500;
-    const recycleDistance = 1000; // When to move elements forward
+    const recycleDistance = 300; // Distance behind player to recycle elements
+    const spawnDistance = 200; // Distance ahead to spawn new elements
     
     envGroup.traverse((child) => {
-        if (child.userData && child.userData.isEnvironmentElement) {
-            // If element is too far behind player, move it ahead
-            if (child.position.z < playerZ - visibleRange) {
-                // Move forward by recycleDistance
-                child.position.z += recycleDistance;
+        if (child.userData.isEnvironmentElement) {
+            // Calculate position relative to player
+            const zPos = child.userData.initialZ - playerZ;
+            
+            // Recycle elements that are too far behind
+            if (zPos > recycleDistance) {
+                // Move to new position ahead
+                child.position.z = playerZ - spawnDistance + Math.random() * 100;
+                child.userData.initialZ = child.position.z;
+                
+                // Randomize position for organic look
+                child.position.x = 40 + (Math.random() - 0.5) * 10;
             }
         }
     });
@@ -155,7 +163,7 @@ function addDecorativeElements(envGroup) {
     });
     
     // Create more pencils on both sides of the road
-    for (let z = -90; z <= 90; z += 20) {
+    for (let z = -500; z <= 500; z += 20) {
         // Left side pencil
         const pencilLeft = new THREE.Group();
         
@@ -359,7 +367,7 @@ function addPaperElements(envGroup) {
     });
     
     // Create tears along the right edge with extended range
-    for (let z = -250; z <= 250; z += 20) { // Extended z-range
+    for (let z = -500; z <= 500; z += 20) { // Double the initial range
         // Only add tears sometimes for a natural look
         if (Math.random() > 0.6) {
             // Create a random shape for the tear
