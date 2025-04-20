@@ -41,6 +41,9 @@ export class SceneManager {
         this.bobAmount = 0.1;        // Amount of camera bob
         this.bobFrequency = 1.5;     // Frequency of camera bob
         this.lastBobTime = 0;        // For timing the bobbing effect
+
+        // Flag for capturing FPS
+        this.lastDeltaTime = 0.016; // 60 FPS
     }
 
     init() {
@@ -247,26 +250,108 @@ export class SceneManager {
     }
     
     // Move objects to create a scrolling effect
-    moveScrollObjects(scrollAmount) {
+    moveScrollObjects(scrollAmount, deltaTime) {
+        // Store deltaTime for speed calculations
+        this.lastDeltaTime = deltaTime || 0.016;
+        
         // Only process if there's significant movement
         if (scrollAmount < 0.0001) return;
         
+        // Calculate recycling threshold based on player speed
+        // Faster speed = recycle segments earlier to prevent seeing gray areas
+        const playerSpeed = scrollAmount / this.lastDeltaTime;
+        const recycleThresholdZ = 150 + (playerSpeed * 3); // Adaptive threshold
+        
         // Loop through all registered scroll objects
         this.scrollObjects.forEach(object => {
-            // For objects that need to be physically moved (road markings, obstacles, etc.)
+            // First collect ALL ground segments before any recycling
+            const groundSegments = [];
             object.traverse((child) => {
-                if (child.isMesh && (child.userData.isRoadMarking || child.userData.isEnvironmentElement)) {
-                    // Move the object forward (increasing Z)
+                if (child.userData?.isGroundSegment) {
+                    groundSegments.push(child);
+                }
+            });
+            
+            // Sort ground segments by Z position for consistent recycling
+            groundSegments.sort((a, b) => a.position.z - b.position.z);
+            
+            // Calculate static reference points ONCE before any segment is moved
+            const segmentLength = 250;
+            const farthestNegSegmentZ = groundSegments.length > 0 ? 
+                groundSegments[0].position.z : 0;
+            
+            // PROCESS ALL NON-GROUND OBJECTS FIRST
+            object.traverse((child) => {
+                if (child.isMesh && child.userData.isEnvironmentElement && !child.userData.isGroundSegment) {
+                    // Regular scrolling
                     child.position.z += scrollAmount;
                     
-                    // If the object has moved past a certain point, loop it back
-                    if (child.position.z > 100) {  // Assuming player is at z=0
-                        child.position.z -= 200;   // Move it back to the start
+                    // Regular recycling for non-ground objects
+                    if (child.position.z > 100) {
+                        // Check if this object has original side info
+                        if (!child.userData.originalSide) {
+                            child.userData.originalSide = child.position.x < 0 ? 'left' : 'right';
+                        }
+                        
+                        // Position based on original side
+                        if (child.userData.originalSide === 'left') {
+                            child.position.x = -10 - Math.random() * 10;
+                        } else {
+                            child.position.x = 10 + Math.random() * 10;
+                        }
+                        
+                        // Move back
+                        child.position.z -= 200;
+                    }
+                }
+            });
+            
+            // PROCESS GROUND SEGMENTS AFTER
+            // Keep track of recycled segments to process fade effects
+            const recycledSegments = [];
+            
+            groundSegments.forEach((segment) => {
+                // Move the segment forward
+                segment.position.z += scrollAmount;
+                
+                // Check if segment needs recycling
+                if (segment.position.z > recycleThresholdZ) {
+                    // Calculate new position - use the static farthestNegSegmentZ
+                    // Slightly offset from previous (-5 units) to ensure overlap between segments
+                    const segmentOverlap = 5;
+                    const newZ = farthestNegSegmentZ - (segmentLength - segmentOverlap);
+                    
+                    // Update position
+                    segment.position.z = newZ;
+                    
+                    // Start fade-in effect
+                    segment.userData.recycleTime = performance.now();
+                    segment.material.opacity = 0.0;
+                    
+                    recycledSegments.push(segment);
+                }
+            });
+            
+            // Process fade-in for newly recycled segments AND previously recycled ones
+            object.traverse((child) => {
+                if (child.userData?.recycleTime && child.material) {
+                    const fadeTime = 300; // 300ms fade-in
+                    const elapsedTime = performance.now() - child.userData.recycleTime;
+                    const fadeProgress = Math.min(elapsedTime / fadeTime, 1.0);
+                    
+                    // Apply fade
+                    child.material.opacity = fadeProgress;
+                    
+                    // Once fully faded in, clean up
+                    if (fadeProgress >= 1.0) {
+                        child.material.opacity = 1.0;
+                        delete child.userData.recycleTime;
                     }
                 }
             });
         });
     }
+
 
     onWindowResize() {
         // Update camera aspect ratio

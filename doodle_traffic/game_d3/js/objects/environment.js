@@ -18,38 +18,44 @@ export function createEnvironment() {
     return envGroup;
 }
 
+
 function addGroundSegments(envGroup) {
     // Create multiple ground segments that can be reused
     const segmentLength = 250;
-    const segmentWidth = 100;
-    const segmentsCount = 6; // More segments for better coverage
+    const segmentWidth = 200;  // INCREASED from 100 to 200 for better coverage
+    const segmentsCount = 10;  // INCREASED from 8 to 10 for better coverage
     
     // Get notebook paper texture for the ground
     const groundTexture = createDottedGridTexture();
     groundTexture.repeat.set(10, 25);
     
-    // Create material with custom shader to allow for fading at the edges
-    const groundMaterial = new THREE.MeshStandardMaterial({ 
-        color: 0xf5f5f5,
-        roughness: 1.0,
-        metalness: 0.0,
-        map: groundTexture,
-        transparent: true,
-        side: THREE.DoubleSide
-    });
-    
-    // Create segments
+    // Create segments with individual materials to prevent shared opacity issues
     for (let i = 0; i < segmentsCount; i++) {
         const groundGeometry = new THREE.PlaneGeometry(segmentWidth, segmentLength);
+        
+        // Create separate material for each segment
+        const groundMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0xf5f5f5,
+            roughness: 1.0,
+            metalness: 0.0,
+            map: groundTexture,
+            transparent: true,
+            side: THREE.DoubleSide
+        });
+        
         const ground = new THREE.Mesh(groundGeometry, groundMaterial);
         
-        // Position segments in a chain
+        // Position segments in a chain with slight overlap (5 units)
         ground.rotation.x = -Math.PI / 2;  // Rotate to lay flat
-        ground.position.y = -0.1;          // Slightly below the road
-        ground.position.z = -(i * segmentLength) + (segmentLength/2);
+        ground.position.y = -0.1 - (i * 0.001);  // IMPORTANT: Slight y-offset to prevent z-fighting
         
-        // Mark for recycling
+        // Positioning with overlap
+        const overlap = 5;
+        ground.position.z = -(i * (segmentLength - overlap)) + (segmentLength/2);
+        
+        // Mark for recycling AND scrolling
         ground.userData.isGroundSegment = true;
+        ground.userData.isEnvironmentElement = true; // For scrolling
         ground.userData.segmentIndex = i;
         ground.userData.initialZ = ground.position.z;
         
@@ -59,11 +65,12 @@ function addGroundSegments(envGroup) {
 }
 
 // Function to update and recycle ground segments
+// In environment.js, modify updateGroundSegments function
 export function updateGroundSegments(envGroup, playerZ) {
     if (!envGroup) return;
     
     const segmentLength = 250;
-    const visibleRange = 750; // Increased from 500 to account for longer segments
+    const visibleRange = 750;
     
     envGroup.traverse((child) => {
         if (child.userData?.isGroundSegment) {
@@ -75,7 +82,15 @@ export function updateGroundSegments(envGroup, playerZ) {
                 // Move this segment ahead of the farthest one
                 const farthestZ = findFarthestSegmentZ(envGroup);
                 // Position new segment at the end of farthest segment
-                child.position.z = farthestZ + (segmentLength/2); 
+                // Position it exactly at the end to ensure no gaps
+                child.position.z = farthestZ + segmentLength; 
+                
+                // Mark this as the new initial position
+                child.userData.initialZ = child.position.z;
+                
+                if (console && console.debug) {
+                    console.debug(`Recycled ground segment to position ${child.position.z.toFixed(2)}`);
+                }
             }
         }
     });
