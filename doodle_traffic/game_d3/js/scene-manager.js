@@ -17,7 +17,7 @@ export class SceneManager {
         
         // Add flags to track when road updates are needed
         this.lastPlayerPosition = { x: 0, y: 0, z: 0 };
-        this.roadUpdateThreshold = 1; // Update road when player moves this far
+        this.roadUpdateThreshold = 0.5; // Update road when player moves this far
         this.lastPlayerZ = 0;
         
         // Camera settings - adjusted for better view

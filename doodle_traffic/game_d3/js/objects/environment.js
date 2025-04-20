@@ -23,7 +23,7 @@ function addGroundSegments(envGroup) {
     // Create multiple ground segments that can be reused
     const segmentLength = 250;
     const segmentWidth = 200;  // INCREASED from 100 to 200 for better coverage
-    const segmentsCount = 10;  // INCREASED from 8 to 10 for better coverage
+    const segmentsCount = 12;  // INCREASED from 8 to 10 for better coverage
     
     // Get notebook paper texture for the ground
     const groundTexture = createDottedGridTexture();
@@ -65,35 +65,123 @@ function addGroundSegments(envGroup) {
 }
 
 // Function to update and recycle ground segments
-// In environment.js, modify updateGroundSegments function
 export function updateGroundSegments(envGroup, playerZ) {
     if (!envGroup) return;
     
     const segmentLength = 250;
-    const visibleRange = 750;
+    const visibleRangeBehind = 750; // How far behind player to keep segments
+    const visibleRangeAhead = 1500; // How far ahead of player to generate segments
+    const lookAheadThreshold = 1000; // Start recycling when within this distance of the farthest segment
     
+    // First, gather information about all ground segments
+    const segments = [];
     envGroup.traverse((child) => {
         if (child.userData?.isGroundSegment) {
-            // Get the segment's end position (center Z + half length)
-            const segmentEndZ = child.position.z + (segmentLength/2);
-            
-            // Check if this segment is behind the visible range
-            if (segmentEndZ < playerZ - visibleRange) {
-                // Move this segment ahead of the farthest one
-                const farthestZ = findFarthestSegmentZ(envGroup);
-                // Position new segment at the end of farthest segment
-                // Position it exactly at the end to ensure no gaps
-                child.position.z = farthestZ + segmentLength; 
-                
-                // Mark this as the new initial position
-                child.userData.initialZ = child.position.z;
-                
-                if (console && console.debug) {
-                    console.debug(`Recycled ground segment to position ${child.position.z.toFixed(2)}`);
-                }
-            }
+            segments.push(child);
         }
     });
+    
+    if (segments.length === 0) return;
+    
+    // Sort segments by Z position for consistent processing
+    segments.sort((a, b) => a.position.z - b.position.z);
+    
+    // Find farthest segment ahead and behind
+    let furthestAheadZ = -Infinity;
+    let furthestBehindZ = Infinity;
+    
+    segments.forEach(segment => {
+        // Calculate segment end positions
+        const segmentEndZ = segment.position.z - (segmentLength/2); // Front edge (most negative Z)
+        const segmentStartZ = segment.position.z + (segmentLength/2); // Back edge (most positive Z)
+        
+        if (segmentEndZ < furthestAheadZ) furthestAheadZ = segmentEndZ;
+        if (segmentStartZ > furthestBehindZ) furthestBehindZ = segmentStartZ;
+    });
+    
+    // Calculate desired coverage range
+    const desiredAheadZ = playerZ - visibleRangeAhead;
+    const desiredBehindZ = playerZ + visibleRangeBehind;
+    
+    // DEBUG OUTPUT
+    console.debug(`Player Z: ${playerZ.toFixed(2)}, Furthest ahead Z: ${furthestAheadZ.toFixed(2)}, ` +
+                 `Furthest behind Z: ${furthestBehindZ.toFixed(2)}`);
+    console.debug(`Desired ahead Z: ${desiredAheadZ.toFixed(2)}, Desired behind Z: ${desiredBehindZ.toFixed(2)}`);
+    
+    // FIRST PASS: Recycle segments that are too far behind
+    let recycledSegments = [];
+    
+    segments.forEach(segment => {
+        const segmentStartZ = segment.position.z + (segmentLength/2); // Back edge
+        
+        // If this segment is entirely behind our desired range
+        if (segmentStartZ > desiredBehindZ) {
+            // Remove from current position to reuse later
+            recycledSegments.push(segment);
+            console.debug(`Marked segment at ${segment.position.z.toFixed(2)} for recycling`);
+        }
+    });
+    
+    // SECOND PASS: Check if we need more segments ahead
+    // Calculate how far ahead we should check for segments
+    const lookAheadZ = desiredAheadZ - lookAheadThreshold;
+    
+    // If farthest segment is not far enough ahead
+    if (furthestAheadZ > lookAheadZ) {
+        console.debug(`Need more segments ahead! furthestAheadZ=${furthestAheadZ.toFixed(2)}, lookAheadZ=${lookAheadZ.toFixed(2)}`);
+        
+        // Calculate how many segments we need to add
+        const distanceNeeded = Math.abs(furthestAheadZ - desiredAheadZ);
+        const segmentsNeeded = Math.ceil(distanceNeeded / segmentLength);
+        
+        console.debug(`Need to add ${segmentsNeeded} segments covering ${distanceNeeded.toFixed(2)} units`);
+        
+        // If we have recycled segments, use them; otherwise, warning
+        if (recycledSegments.length > 0) {
+            // Use recycled segments first
+            for (let i = 0; i < Math.min(segmentsNeeded, recycledSegments.length); i++) {
+                const segment = recycledSegments[i];
+                
+                // Position at the front, continuing from furthest segment
+                const newZ = furthestAheadZ - (i * segmentLength);
+                
+                // Update position
+                segment.position.z = newZ;
+                segment.userData.initialZ = newZ;
+                
+                console.debug(`Recycled segment to new position: ${newZ.toFixed(2)}`);
+            }
+        } else {
+            console.warn(`No segments available to recycle! Need ${segmentsNeeded} more segments ahead.`);
+        }
+    }
+    
+    // Verify that segments are correctly positioned
+    verifySegmentPositioning(segments);
+}
+
+// Helper function to find gaps or overlaps in segments
+function verifySegmentPositioning(segments) {
+    // Sort segments by Z position
+    segments.sort((a, b) => a.position.z - b.position.z);
+    
+    // Check for gaps or overlaps
+    for (let i = 0; i < segments.length - 1; i++) {
+        const currentSegment = segments[i];
+        const nextSegment = segments[i + 1];
+        
+        const segmentLength = 250;
+        const currentEndZ = currentSegment.position.z - (segmentLength/2);
+        const nextStartZ = nextSegment.position.z + (segmentLength/2);
+        
+        // Calculate gap (negative means overlap)
+        const gap = nextStartZ - currentEndZ;
+        
+        // Log significant gaps or overlaps
+        if (Math.abs(gap) > 10) {
+            console.warn(`Segment positioning issue: ${gap > 0 ? 'Gap' : 'Overlap'} of ${Math.abs(gap).toFixed(2)} units between segments at ${currentSegment.position.z.toFixed(2)} and ${nextSegment.position.z.toFixed(2)}`);
+        }
+    }
 }
 
 // Find the farthest forward segment
