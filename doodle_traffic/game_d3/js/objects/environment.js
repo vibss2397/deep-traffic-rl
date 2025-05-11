@@ -3,21 +3,19 @@ import * as THREE from 'three';
 import { createNotebookTexture, createDottedGridTexture } from '../utils/texture-generator.js';
 
 export function createEnvironment() {
-    // Create a group to hold all environment elements
     const envGroup = new THREE.Group();
     
-    // Add ground plane segments
+    // Creating ground segments
     addGroundSegments(envGroup);
     
-    // Add decorative elements along the sides
-    addDecorativeElements(envGroup);
+    // Create and add decorative elements more efficiently
+    addDecorativeElementsOptimized(envGroup);
     
-    // Add paper elements (tears, binding holes, etc.)
+    // Add notebook paper elements
     addPaperElements(envGroup);
     
     return envGroup;
 }
-
 
 function addGroundSegments(envGroup) {
     // Create multiple ground segments that can be reused
@@ -203,27 +201,105 @@ function findFarthestSegmentZ(envGroup) {
 
 // Function to update environment decorations
 export function updateEnvironmentElements(envGroup, playerZ) {
-    const recycleDistance = 300; // Distance behind player to recycle elements
-    const spawnDistance = 200; // Distance ahead to spawn new elements
+    if (!envGroup) return;
     
+    const recycleDistance = 300; // Distance behind player to recycle elements
+    const spawnDistance = 400; // Increased distance ahead to spawn new elements (from 200 to 400)
+    
+    // Maintain count of recycled elements by type for balanced distribution
+    let pencilsCount = { left: 0, right: 0 };
+    let erasersCount = { left: 0, right: 0 };
+    let spotsCount = { left: 0, right: 0 };
+    
+    // First, collect information about the environment elements
+    const elements = [];
     envGroup.traverse((child) => {
-        if (child.userData.isEnvironmentElement) {
-            // Calculate position relative to player
-            const zPos = child.userData.initialZ - playerZ;
+        if (child.userData.isEnvironmentElement && !child.userData.isGroundSegment) {
+            elements.push(child);
+        }
+    });
+    
+    // Process elements in a deterministic order to prevent clustering
+    elements.forEach((element) => {
+        // Calculate position relative to player
+        const zPos = element.userData.initialZ - playerZ;
+        
+        // Recycle elements that are too far behind
+        if (zPos > recycleDistance) {
+            // Get the element type for balanced distribution
+            let elementType = 'other';
+            if (element.type === 'Group' && element.children[0]?.geometry?.type === 'CylinderGeometry') {
+                elementType = 'pencil';
+            } else if (element.geometry?.type === 'BoxGeometry') {
+                elementType = 'eraser';
+            } else if (element.geometry?.type === 'CircleGeometry') {
+                elementType = 'spot';
+            }
             
-            // Recycle elements that are too far behind
-            if (zPos > recycleDistance) {
-                // Move to new position ahead
-                child.position.z = playerZ - spawnDistance + Math.random() * 100;
-                child.userData.initialZ = child.position.z;
+            // Determine which side has fewer elements of this type
+            let side;
+            if (elementType === 'pencil') {
+                side = pencilsCount.left <= pencilsCount.right ? 'left' : 'right';
+                pencilsCount[side]++;
+            } else if (elementType === 'eraser') {
+                side = erasersCount.left <= erasersCount.right ? 'left' : 'right';
+                erasersCount[side]++;
+            } else if (elementType === 'spot') {
+                side = spotsCount.left <= spotsCount.right ? 'left' : 'right';
+                spotsCount[side]++;
+            } else {
+                side = Math.random() > 0.5 ? 'left' : 'right';
+            }
+            
+            // Store the side for future reference
+            element.userData.originalSide = side;
+            
+            // Create more variability in the new position
+            const newZ = playerZ - spawnDistance - Math.random() * 100;
+            element.userData.initialZ = newZ;
+            element.position.z = newZ;
+            
+            // Position based on the chosen side with more randomization
+            const sideMultiplier = side === 'left' ? -1 : 1;
+            
+            if (elementType === 'pencil') {
+                // Wider range for pencils
+                element.position.x = sideMultiplier * (8 + Math.random() * 15);
+                element.position.y = 0.2 + Math.random() * 0.8;
                 
-                // Randomize position for organic look
-                child.position.x = 40 + (Math.random() - 0.5) * 10;
+                // More varied rotation
+                element.rotation.z = sideMultiplier * (Math.PI / 6) + (Math.random() * 0.6 - 0.3);
+                element.rotation.x = Math.random() * 0.4 - 0.2;
+                element.rotation.y = Math.random() * Math.PI;
+            } else if (elementType === 'eraser') {
+                // Medium range for erasers
+                element.position.x = sideMultiplier * (7 + Math.random() * 12);
+                element.position.y = 0.2 + Math.random() * 0.3;
+                
+                // Random rotation
+                element.rotation.y = Math.random() * Math.PI;
+                element.rotation.x = Math.random() * 0.4 - 0.2;
+                element.rotation.z = Math.random() * 0.4 - 0.2;
+            } else if (elementType === 'spot') {
+                // Smaller range for spots
+                element.position.x = sideMultiplier * (5 + Math.random() * 12);
+                element.position.y = 0.01 + Math.random() * 0.02;
+                
+                // Spots stay flat
+                element.rotation.x = -Math.PI / 2;
+            } else {
+                // Default positioning for other elements
+                element.position.x = sideMultiplier * (5 + Math.random() * 15);
+                element.position.y = 0.1 + Math.random() * 0.9;
+                
+                // Random rotation
+                element.rotation.x = Math.random() * 0.2 - 0.1;
+                element.rotation.y = Math.random() * Math.PI;
+                element.rotation.z = Math.random() * 0.2 - 0.1;
             }
         }
     });
 }
-
 
 function createGround() {
     // Create a large ground plane beyond the road - make it longer to match the road
@@ -248,173 +324,164 @@ function createGround() {
     return ground;
 }
 
-function addDecorativeElements(envGroup) {
-    // Create "pencil" markers along the sides
+// More optimized way to add decorative elements with better distribution
+function addDecorativeElementsOptimized(envGroup) {
+    // Create a single reusable geometry for each type (better performance)
     const pencilGeometry = new THREE.CylinderGeometry(0.1, 0.1, 1.5, 8);
+    const pencilLeadGeometry = new THREE.ConeGeometry(0.1, 0.3, 8);
+    const eraserGeometry = new THREE.BoxGeometry(0.8, 0.4, 1.5);
     const pencilMaterial = new THREE.MeshStandardMaterial({ 
         color: 0xffcc00,  // Pencil yellow
         roughness: 0.8,
         metalness: 0.2
     });
-    
-    // Add "pencil lead" to one end
-    const pencilLeadGeometry = new THREE.ConeGeometry(0.1, 0.3, 8);
     const pencilLeadMaterial = new THREE.MeshStandardMaterial({
         color: 0x333333,  // Dark gray for pencil lead
         roughness: 0.7,
         metalness: 0.3
     });
-    
-    // Create more pencils on both sides of the road
-    for (let z = -500; z <= 500; z += 20) {
-        // Left side pencil
-        const pencilLeft = new THREE.Group();
-        
-        const pencilBodyL = new THREE.Mesh(pencilGeometry, pencilMaterial);
-        const pencilLeadL = new THREE.Mesh(pencilLeadGeometry, pencilLeadMaterial);
-        pencilLeadL.position.y = -0.9;  // Position at the bottom of the pencil
-        pencilLeadL.rotation.x = Math.PI;  // Point downward
-        
-        pencilLeft.add(pencilBodyL);
-        pencilLeft.add(pencilLeadL);
-        
-        // Randomize position and rotation for hand-drawn effect
-        const offsetX = -10 - Math.random() * 5;
-        const offsetZ = z + (Math.random() * 6 - 3);
-        pencilLeft.position.set(offsetX, 0.75, offsetZ);
-        pencilLeft.rotation.z = Math.PI / 6 + (Math.random() * 0.2 - 0.1);  // Slight random tilt
-        pencilLeft.rotation.x = Math.random() * 0.2 - 0.1;  // Slight random tilt
-        pencilLeft.rotation.y = Math.random() * 0.4 - 0.2;  // Slight random rotation
-        
-        pencilLeft.userData.isEnvironmentElement = true;
-        pencilLeft.userData.initialZ = offsetZ;
-
-        pencilLeft.traverse(child => {
-            if (child.isMesh) {
-                child.castShadow = true;
-                child.userData.isRoadMarking = true;  // Make it move with road
-            }
-        });
-        
-        envGroup.add(pencilLeft);
-        
-        // Right side pencil (only add some, not symmetric)
-        if (Math.random() > 0.3) {  // 70% chance of placing a pencil
-            const pencilRight = new THREE.Group();
-            
-            const pencilBodyR = new THREE.Mesh(pencilGeometry, pencilMaterial);
-            const pencilLeadR = new THREE.Mesh(pencilLeadGeometry, pencilLeadMaterial);
-            pencilLeadR.position.y = -0.9;  // Position at the bottom of the pencil
-            pencilLeadR.rotation.x = Math.PI;  // Point downward
-            
-            pencilRight.add(pencilBodyR);
-            pencilRight.add(pencilLeadR);
-            
-            // Randomize position and rotation for hand-drawn effect
-            const offsetX = 10 + Math.random() * 5;
-            const offsetZ = z - 7 + (Math.random() * 6 - 3);  // Offset from left side for variety
-            pencilRight.position.set(offsetX, 0.75, offsetZ);
-            pencilRight.rotation.z = -Math.PI / 6 + (Math.random() * 0.2 - 0.1);  // Mirror the tilt
-            pencilRight.rotation.x = Math.random() * 0.2 - 0.1;  // Slight random tilt
-            pencilRight.rotation.y = Math.random() * 0.4 - 0.2;  // Slight random rotation
-            
-            pencilRight.userData.isEnvironmentElement = true;
-            pencilRight.userData.initialZ = offsetZ;
-
-            pencilRight.traverse(child => {
-                if (child.isMesh) {
-                    child.castShadow = true;
-                    child.userData.isRoadMarking = true;  // Make it move with road
-                }
-            });
-            
-            envGroup.add(pencilRight);
-        }
-    }
-    
-    // Add eraser chunks along the sides
-    const eraserGeometry = new THREE.BoxGeometry(0.8, 0.4, 1.5);
     const eraserMaterial = new THREE.MeshStandardMaterial({ 
         color: 0xff6666,  // Pink eraser
         roughness: 0.9,
         metalness: 0.1
     });
-    
-    // Place erasers at more random intervals
-    for (let z = -80; z <= 80; z += 12) {
-        if (Math.random() > 0.3) {  // 70% chance of placing an eraser
-            const offsetX = -8 - Math.random() * 3;  // Random position along left side
-            const offsetZ = z + (Math.random() * 8 - 4);  // Randomize the z position
-            
-            const eraser = new THREE.Mesh(eraserGeometry, eraserMaterial);
-            eraser.position.set(offsetX, 0.2, offsetZ);
-            eraser.rotation.y = Math.random() * Math.PI;  // Random rotation
-            eraser.rotation.x = Math.random() * 0.1;  // Slight tilt
-            eraser.rotation.z = Math.random() * 0.1;  // Slight tilt
-            eraser.castShadow = true;
-            eraser.userData.isRoadMarking = true;  // Make it move with road
-            eraser.userData.isEnvironmentElement = true;
-            eraser.userData.initialZ = offsetZ;
-            envGroup.add(eraser);
-        }
-        
-        if (Math.random() > 0.4) {  // 60% chance of placing an eraser on right side
-            const offsetX = 8 + Math.random() * 3;  // Random position along right side
-            const offsetZ = z + (Math.random() * 8 - 4);  // Different z than left side
-            
-            const eraser = new THREE.Mesh(eraserGeometry, eraserMaterial);
-            eraser.position.set(offsetX, 0.2, offsetZ);
-            eraser.rotation.y = Math.random() * Math.PI;  // Random rotation
-            eraser.rotation.x = Math.random() * 0.1;  // Slight tilt
-            eraser.rotation.z = Math.random() * 0.1;  // Slight tilt
-            eraser.castShadow = true;
-            eraser.userData.isRoadMarking = true;  // Make it move with road
-            eraser.userData.isEnvironmentElement = true;
-            eraser.userData.initialZ = offsetZ;
-            envGroup.add(eraser);
-        }
-    }
-    
-    // Add some paper clips
-    const paperClipCurve = new THREE.CurvePath();
-    
-    // Create a simple paper clip shape
-    const curve1 = new THREE.EllipseCurve(0, 0, 0.5, 1, 0, Math.PI, false);
-    const curve2 = new THREE.LineCurve3(
-        new THREE.Vector3(0.5, 0, 0),
-        new THREE.Vector3(0.5, -2, 0)
-    );
-    const curve3 = new THREE.EllipseCurve(0, -2, 0.5, 1, 0, Math.PI, true);
-    const curve4 = new THREE.LineCurve3(
-        new THREE.Vector3(-0.5, -2, 0),
-        new THREE.Vector3(-0.5, 0, 0)
-    );
-    
-    paperClipCurve.add(curve1);
-    
-    const paperClipGeometry = new THREE.TubeGeometry(curve1, 20, 0.08, 8, false);
-    const paperClipMaterial = new THREE.MeshStandardMaterial({
-        color: 0xcccccc,  // Silver color
-        roughness: 0.3,
-        metalness: 0.8
+    const spotMaterial = new THREE.MeshStandardMaterial({
+        color: 0x555555,
+        roughness: 0.9,
+        metalness: 0.1
     });
     
-    // Place a few paper clips near the road
-    for (let i = 0; i < 5; i++) {
-        const paperClip = new THREE.Mesh(paperClipGeometry, paperClipMaterial);
-        const side = Math.random() > 0.5 ? 1 : -1;  // Randomly choose left or right side
-        const offsetX = side * (6 + Math.random() * 4);  // Position along the side
-        const offsetZ = -70 + i * 30 + Math.random() * 10;  // Space them out along the road
-        
-        paperClip.position.set(offsetX, 0.05, offsetZ);
-        paperClip.rotation.x = -Math.PI / 2;  // Lay flat
-        paperClip.rotation.z = Math.random() * Math.PI;  // Random rotation
-        paperClip.castShadow = true;
-        paperClip.userData.isRoadMarking = true;  // Make it move with road
-        paperClip.userData.isEnvironmentElement = true;
-        paperClip.userData.initialZ = offsetZ;
-        envGroup.add(paperClip);
+    // Define broader spawn zone for better distribution
+    const zRange = [-800, 200]; // Expanded range (more elements ahead of player)
+    
+    // Create placeholder arrays to batch add elements later
+    const leftElements = [];
+    const rightElements = [];
+    
+    // Precompute random positions for balanced element placement
+    const positionsLeft = [];
+    const positionsRight = [];
+    
+    // Generate positions for left side
+    for (let z = zRange[0]; z <= zRange[1]; z += 10) {
+        const random = Math.random();
+        if (random < 0.5) { // 50% chance to place something at this z-level
+            positionsLeft.push({
+                z: z + (Math.random() * 15 - 7.5), // Add some randomness to z
+                x: -(8 + Math.random() * 12), // Random distance from road
+                type: random < 0.15 ? 'pencil' : 
+                      random < 0.35 ? 'eraser' : 'spot'
+            });
+        }
     }
+    
+    // Generate positions for right side (similar number as left)
+    for (let z = zRange[0]; z <= zRange[1]; z += 10) {
+        const random = Math.random();
+        if (random < 0.5) { // 50% chance to place something at this z-level
+            positionsRight.push({
+                z: z + (Math.random() * 15 - 7.5), // Add some randomness to z
+                x: 8 + Math.random() * 12, // Random distance from road
+                type: random < 0.15 ? 'pencil' : 
+                      random < 0.35 ? 'eraser' : 'spot'
+            });
+        }
+    }
+    
+    // Create pencils function to avoid code duplication
+    const createPencil = (x, z, side) => {
+        const pencil = new THREE.Group();
+        const pencilBody = new THREE.Mesh(pencilGeometry, pencilMaterial);
+        const pencilLead = new THREE.Mesh(pencilLeadGeometry, pencilLeadMaterial);
+        
+        pencilLead.position.y = -0.9;  // Position at the bottom of the pencil
+        pencilLead.rotation.x = Math.PI;  // Point downward
+        
+        pencil.add(pencilBody);
+        pencil.add(pencilLead);
+        
+        // Set position and rotation
+        pencil.position.set(x, 0.2 + Math.random() * 0.8, z);
+        pencil.rotation.z = (side === 'left' ? -1 : 1) * (Math.PI / 6 + Math.random() * 0.3);
+        pencil.rotation.x = Math.random() * 0.4 - 0.2;
+        pencil.rotation.y = Math.random() * Math.PI;
+        
+        // Tag for recycling
+        pencil.userData.isEnvironmentElement = true;
+        pencil.userData.initialZ = z;
+        pencil.userData.originalSide = side;
+        
+        // Add shadow casting
+        pencil.traverse(child => {
+            if (child.isMesh) {
+                child.castShadow = true;
+                child.userData.isRoadMarking = true;
+            }
+        });
+        
+        return pencil;
+    };
+    
+    // Process all the precomputed positions
+    positionsLeft.forEach(pos => {
+        if (pos.type === 'pencil') {
+            leftElements.push(createPencil(pos.x, pos.z, 'left'));
+        } else if (pos.type === 'eraser') {
+            const eraser = new THREE.Mesh(eraserGeometry, eraserMaterial);
+            eraser.position.set(pos.x, 0.2 + Math.random() * 0.3, pos.z);
+            eraser.rotation.y = Math.random() * Math.PI;
+            eraser.rotation.x = Math.random() * 0.4 - 0.2;
+            eraser.rotation.z = Math.random() * 0.4 - 0.2;
+            eraser.castShadow = true;
+            eraser.userData.isRoadMarking = true;
+            eraser.userData.isEnvironmentElement = true;
+            eraser.userData.initialZ = pos.z;
+            eraser.userData.originalSide = 'left';
+            leftElements.push(eraser);
+        } else if (pos.type === 'spot') {
+            const spotGeometry = new THREE.CircleGeometry(0.1 + Math.random() * 0.25, 8);
+            const spot = new THREE.Mesh(spotGeometry, spotMaterial);
+            spot.position.set(pos.x, 0.01 + Math.random() * 0.02, pos.z);
+            spot.rotation.x = -Math.PI / 2;
+            spot.userData.isRoadMarking = true;
+            spot.userData.isEnvironmentElement = true;
+            spot.userData.initialZ = pos.z;
+            spot.userData.originalSide = 'left';
+            leftElements.push(spot);
+        }
+    });
+    
+    positionsRight.forEach(pos => {
+        if (pos.type === 'pencil') {
+            rightElements.push(createPencil(pos.x, pos.z, 'right'));
+        } else if (pos.type === 'eraser') {
+            const eraser = new THREE.Mesh(eraserGeometry, eraserMaterial);
+            eraser.position.set(pos.x, 0.2 + Math.random() * 0.3, pos.z);
+            eraser.rotation.y = Math.random() * Math.PI;
+            eraser.rotation.x = Math.random() * 0.4 - 0.2;
+            eraser.rotation.z = Math.random() * 0.4 - 0.2;
+            eraser.castShadow = true;
+            eraser.userData.isRoadMarking = true;
+            eraser.userData.isEnvironmentElement = true;
+            eraser.userData.initialZ = pos.z;
+            eraser.userData.originalSide = 'right';
+            rightElements.push(eraser);
+        } else if (pos.type === 'spot') {
+            const spotGeometry = new THREE.CircleGeometry(0.1 + Math.random() * 0.25, 8);
+            const spot = new THREE.Mesh(spotGeometry, spotMaterial);
+            spot.position.set(pos.x, 0.01 + Math.random() * 0.02, pos.z);
+            spot.rotation.x = -Math.PI / 2;
+            spot.userData.isRoadMarking = true;
+            spot.userData.isEnvironmentElement = true;
+            spot.userData.initialZ = pos.z;
+            spot.userData.originalSide = 'right';
+            rightElements.push(spot);
+        }
+    });
+    
+    // Batch add all elements at once (better performance)
+    leftElements.forEach(element => envGroup.add(element));
+    rightElements.forEach(element => envGroup.add(element));
 }
 
 function addPaperElements(envGroup) {
