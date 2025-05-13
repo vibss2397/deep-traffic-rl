@@ -4,6 +4,9 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { createRoad, updateRoad } from './objects/road.js';
 import { createEnvironment, updateGroundSegments, updateEnvironmentElements } from './objects/environment.js';
 
+// Debug flags
+const DEBUG_SCROLLING = false;
+
 export class SceneManager {
     constructor() {
         this.scene = null;
@@ -44,9 +47,17 @@ export class SceneManager {
 
         // Flag for capturing FPS
         this.lastDeltaTime = 0.016; // 60 FPS
+        
+        // Track last update times for throttling
+        this._lastGroundUpdateTime = 0;
+        this._lastEnvironmentUpdateTime = 0;
+        
+        // Track skipped frames for performance monitoring
+        this._skippedFrames = 0;
     }
 
     init() {
+        console.log("Initializing SceneManager");
         // Create scene
         this.scene = new THREE.Scene();
         this.scene.background = new THREE.Color(0xf0f0f0); // Light gray background
@@ -84,10 +95,6 @@ export class SceneManager {
         // Create road - pass scene for segment management
         this.road = createRoad(this.scene);
         this.scene.add(this.road);
-        
-        //--- Commenting this out as google thinnks this is problematic ---
-        //  Register road for scrolling
-        //this.registerScrollObject(this.road);
         
         // Find and register all scrollable textures
         this.collectScrollableTextures();
@@ -256,7 +263,7 @@ export class SceneManager {
         
         // Performance optimization: Process in batches when possible
         const groundSegments = [];
-        const nonGroundElements = [];
+        const environmentElements = [];
         const recycleThresholdZ = 100;  // When objects get recycled
         let farthestNegSegmentZ = Infinity;  // Track most negative Z (farthest ahead)
         const segmentLength = 250;
@@ -274,15 +281,15 @@ export class SceneManager {
                         farthestNegSegmentZ = frontEdgeZ;
                     }
                 }
-                // Collect non-ground elements for batch processing
-                else if (child.userData?.isEnvironmentElement) {
-                    nonGroundElements.push(child);
+                // Collect environment elements for batch processing
+                else if (child.userData?.isEnvironmentElement && !child.userData?.isGroundSegment) {
+                    environmentElements.push(child);
                 }
             });
         });
         
         // Early return if no objects found
-        if (groundSegments.length === 0 && nonGroundElements.length === 0) return;
+        if (groundSegments.length === 0 && environmentElements.length === 0) return;
         
         // Process ground segments
         const recycledSegments = [];
@@ -328,16 +335,27 @@ export class SceneManager {
             }
         });
         
-        // Batch process non-ground elements 
-        nonGroundElements.forEach((element) => {
-            // Move the element
-            element.position.z += scrollAmount;
-            
-            // Skip detailed recycling - this is handled separately in updateEnvironmentElements
-            // Just do basic position updates here for performance
+        // Batch process environment elements - FIXED
+        let elementsMoved = 0;
+        environmentElements.forEach((element) => {
+            // Skip processing for elements managed by the grid system
+            if (element.userData.initialZ !== undefined) {
+                // Move the element by scrollAmount
+                element.position.z += scrollAmount;
+                
+                // Update initialZ to keep consistent with scene-manager scrolling 
+                element.userData.initialZ += scrollAmount;
+                
+                elementsMoved++;
+                
+                // IMPORTANT - don't recycle here, that's handled by updateEnvironmentElements
+            }
         });
+        
+        if (DEBUG_SCROLLING && Math.random() < 0.01) {
+            console.log(`Moved ${elementsMoved} environment elements by ${scrollAmount.toFixed(3)} units`);
+        }
     }
-
 
     onWindowResize() {
         // Update camera aspect ratio
@@ -410,24 +428,29 @@ export class SceneManager {
         // Only update road and environment when player has moved a significant amount
         const distanceMoved = Math.abs(this.playerPosition.z - this.lastPlayerPosition.z);
         if (distanceMoved > distanceThreshold) {
-            // Batch update environment elements - much more efficient
-            if (this.environment) {
-                // Use time-based throttling for expensive operations
-                const currentTime = performance.now();
-                const timeSinceLastUpdate = currentTime - (this._lastEnvironmentUpdateTime || 0);
-                
-                // Update ground segments every frame when needed
-                updateGroundSegments(this.environment, this.playerPosition.z);
-                
-                // But update decorative elements less frequently for better performance
-                // Only update if significant time has passed (100ms = 10 updates per second max)
-                if (timeSinceLastUpdate > 100) {
+            // IMPROVED: More efficient environment updates with better time-based throttling
+            const currentTime = performance.now();
+            
+            // Update ground segments with moderate frequency
+            const groundUpdateInterval = 100; // 10 updates per second max
+            if (currentTime - this._lastGroundUpdateTime > groundUpdateInterval) {
+                if (this.environment) {
+                    updateGroundSegments(this.environment, this.playerPosition.z);
+                    this._lastGroundUpdateTime = currentTime;
+                }
+            }
+            
+            // Update environment elements less frequently
+            const environmentUpdateInterval = 200; // 5 updates per second max
+            if (currentTime - this._lastEnvironmentUpdateTime > environmentUpdateInterval) {
+                if (this.environment) {
+                    // IMPORTANT: This is what recycles elements when they're too far behind
                     updateEnvironmentElements(this.environment, this.playerPosition.z);
                     this._lastEnvironmentUpdateTime = currentTime;
                 }
             }
             
-            // Update road less frequently for better performance
+            // Update road
             updateRoad(this.playerPosition.z, speed, deltaTime);
             
             // Store position for next comparison
