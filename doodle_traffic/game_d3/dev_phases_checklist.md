@@ -22,7 +22,7 @@
 - [x] Create scrolling mechanism to move the world past the player
 - [~] Develop segment types (straight, left turn, right turn)
 - [~] Implement basic road segment recycling for performance
-- [ ] Add distance tracking for scoring
+- [x] Add distance tracking for scoring
 - [ ] Extend notebook paper background beyond the road
 - [ ] Add subtle paper elements (edge tears, binding holes)
 - [ ] Ensure background scrolls properly with the road

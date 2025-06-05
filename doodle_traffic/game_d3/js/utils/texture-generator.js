@@ -1,94 +1,69 @@
 // Custom texture creation
 import * as THREE from 'three';
 
-// Create a notebook paper texture with enhanced visual features
+// Create a vintage notebook paper texture with a blue-ish grid
 export function createNotebookTexture() {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     
-    // Higher resolution for better detail
-    canvas.width = 1024;
-    canvas.height = 1024;
+    // Resolution for the texture - 512x512 is a good balance
+    canvas.width = 512; 
+    canvas.height = 512;
     
-    // Fill background with off-white color
-    ctx.fillStyle = '#f8f8f8';
+    console.log("[texture-generator] createNotebookTexture: Canvas created for vintage (off-white bg, navy grid) notebook texture.");
+    
+    // 1. Fill background with an off-white vintage paper color
+    ctx.fillStyle = '#fdfdf6'; // "Old Lace" - a yellowish off-white
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Draw horizontal lines - more prominent
-    ctx.strokeStyle = '#c0c0ff';
-    ctx.lineWidth = 2;
-    
-    for (let y = 32; y < canvas.height; y += 32) {
+    console.log("[texture-generator] createNotebookTexture: Canvas filled with off-white vintage paper color.");
+
+    // 2. Add subtle noise/texture for an aged look
+    const numSpecks = 2000; // Number of specks for texture
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.04)'; // Subtle dark specks for light background
+    for (let i = 0; i < numSpecks; i++) {
+        const x = Math.random() * canvas.width;
+        const y = Math.random() * canvas.height;
+        const size = Math.random() * 1.5; // Small specks
         ctx.beginPath();
-        ctx.moveTo(0, y);
-        ctx.lineTo(canvas.width, y);
-        ctx.stroke();
+        ctx.arc(x, y, size, 0, Math.PI * 2);
+        ctx.fill();
     }
-    
-    // Draw vertical lines - more subtle grid for better movement cues
-    ctx.strokeStyle = '#e8e8ff';
-    ctx.lineWidth = 1;
-    
-    for (let x = 32; x < canvas.width; x += 32) {
+    console.log("[texture-generator] createNotebookTexture: Added subtle dark noise specks.");
+
+    // 3. Draw a grid of navy blue squares
+    ctx.strokeStyle = '#000080'; // Navy Blue for the grid
+    ctx.lineWidth = 0.75;        // Keep lines relatively thin for a classic look
+    const gridSpacing = canvas.width / 20; // Approx 25-26px for a 512px canvas, creating 20 squares across
+
+    // Draw vertical grid lines
+    for (let x = gridSpacing; x < canvas.width; x += gridSpacing) {
         ctx.beginPath();
         ctx.moveTo(x, 0);
         ctx.lineTo(x, canvas.height);
         ctx.stroke();
     }
-    
-    // Draw vertical line (margin) - more prominent
-    ctx.strokeStyle = '#ffb0b0';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(64, 0);
-    ctx.lineTo(64, canvas.height);
-    ctx.stroke();
-    
-    // Add some subtle texture variations for visual interest
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.03)';
-    for (let i = 0; i < 50; i++) {
-        const x = Math.random() * canvas.width;
-        const y = Math.random() * canvas.height;
-        const size = 2 + Math.random() * 5;
-        
+    console.log("[texture-generator] createNotebookTexture: Drew vertical navy grid lines.");
+
+    // Draw horizontal grid lines
+    for (let y = gridSpacing; y < canvas.height; y += gridSpacing) {
         ctx.beginPath();
-        ctx.arc(x, y, size, 0, Math.PI * 2);
-        ctx.fill();
+        ctx.moveTo(0, y);
+        ctx.lineTo(canvas.width, y);
+        ctx.stroke();
     }
+    console.log("[texture-generator] createNotebookTexture: Drew horizontal navy grid lines.");
     
     const texture = new THREE.CanvasTexture(canvas);
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
-    texture.repeat.set(1, 5);
+    // texture.repeat.set(1, 5); // This is overridden in environment.js
+    texture.needsUpdate = true; 
     
+    console.log("[texture-generator] createNotebookTexture: Returning vintage (off-white bg, navy grid) texture object:", texture);
     return texture;
 }
 
-// Create a simple line texture
-export function createLineTexture(color = '#000000', width = 2) {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    
-    canvas.width = 64;
-    canvas.height = 64;
-    
-    // Transparent background
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    
-    // Draw a single line in the center
-    ctx.strokeStyle = color;
-    ctx.lineWidth = width;
-    ctx.beginPath();
-    ctx.moveTo(32, 0);
-    ctx.lineTo(32, 64);
-    ctx.stroke();
-    
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
-    
-    return texture;
-}
+
 
 // Function to create a texture with sketchy lines
 export function createSketchyTexture(color = '#333333', lineCount = 5, jitter = 3) {
@@ -124,253 +99,48 @@ export function createSketchyTexture(color = '#333333', lineCount = 5, jitter = 
     const texture = new THREE.CanvasTexture(canvas);
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
-    
+    texture.needsUpdate = true;
     return texture;
 }
 
-// Create a dotted grid texture
-export function createDottedGridTexture() {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    
-    canvas.width = 256;
-    canvas.height = 256;
-    
-    // Fill with off-white background
-    ctx.fillStyle = '#f5f5f5';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Draw grid dots
-    ctx.fillStyle = '#cccccc';
-    
-    for (let x = 16; x < canvas.width; x += 16) {
-        for (let y = 16; y < canvas.height; y += 16) {
-            ctx.beginPath();
-            ctx.arc(x, y, 1, 0, Math.PI * 2);
-            ctx.fill();
-        }
-    }
-    
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.wrapS = THREE.RepeatWrapping;
-    texture.wrapT = THREE.RepeatWrapping;
-    texture.repeat.set(5, 20); // More repetition for smoother scrolling
-    
-    return texture;
-}
 
-// Create a texture that appears to be actively drawn
-export function createActiveDrawingTexture(drawingProgress = 0.5) {
+export function createHandDrawnPaperTexture() {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
-    
-    // Higher resolution for better detail
-    canvas.width = 1024;
-    canvas.height = 1024;
-    
-    // Fill background with off-white color
-    ctx.fillStyle = '#f8f8f8';
+
+    canvas.width = 512;
+    canvas.height = 512; // A square texture is often easiest to work with for repeating patterns
+
+    const paperColor = '#F5ECCD'    // Base paper color - should match scene background
+    const speckleColor = 'rgba(101, 67, 33, 0.04)'; // For paper grain
+
+    console.log("[texture-generator] createHandDrawnPaperTexture: Canvas created.");
+
+    // 1. Fill background with paper color
+    ctx.fillStyle = paperColor;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Function to draw a sketchy line
-    const drawSketchyLine = (x1, y1, x2, y2, width, color, opacity, jitterAmount) => {
-        ctx.strokeStyle = color;
-        ctx.globalAlpha = opacity;
-        ctx.lineWidth = width;
-        
-        // Draw main line
-        ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        
-        // Create control points with jitter
-        const numSegments = 5;
-        for (let i = 1; i <= numSegments; i++) {
-            const t = i / numSegments;
-            const x = x1 + (x2 - x1) * t;
-            const y = y1 + (y2 - y1) * t;
-            
-            // Add random jitter
-            const jitter = jitterAmount * (1 - Math.abs(t - 0.5) * 2); // More jitter in middle
-            const jitterX = x + (Math.random() - 0.5) * jitter;
-            const jitterY = y + (Math.random() - 0.5) * jitter;
-            
-            ctx.lineTo(jitterX, jitterY);
-        }
-        
-        ctx.stroke();
-        
-        // Draw additional lighter, more jittery lines for sketchy effect
-        if (Math.random() < 0.7) {
-            ctx.globalAlpha = opacity * 0.5;
-            ctx.lineWidth = width * 0.7;
-            
-            ctx.beginPath();
-            ctx.moveTo(x1 + (Math.random() - 0.5) * jitterAmount, 
-                       y1 + (Math.random() - 0.5) * jitterAmount);
-            
-            for (let i = 1; i <= numSegments; i++) {
-                const t = i / numSegments;
-                const x = x1 + (x2 - x1) * t;
-                const y = y1 + (y2 - y1) * t;
-                
-                const jitter = jitterAmount * 1.5; // More jitter for extra lines
-                const jitterX = x + (Math.random() - 0.5) * jitter;
-                const jitterY = y + (Math.random() - 0.5) * jitter;
-                
-                ctx.lineTo(jitterX, jitterY);
-            }
-            
-            ctx.stroke();
-        }
-        
-        // Reset alpha
-        ctx.globalAlpha = 1.0;
-    };
-    
-    // Draw horizontal lines with progress-based opacity
-    const totalLines = 32; // Number of horizontal lines
-    for (let i = 0; i < totalLines; i++) {
-        const y = 32 + i * 32;
-        
-        // Calculate max drawing distance based on progress (0-1)
-        const maxDist = canvas.width * drawingProgress;
-        
-        // Draw lines in segments to simulate drawing in progress
-        const segments = 8;
-        const segmentWidth = canvas.width / segments;
-        
-        for (let j = 0; j < segments; j++) {
-            const startX = j * segmentWidth;
-            const endX = startX + segmentWidth;
-            
-            // Skip segments beyond the drawing progress
-            if (startX > maxDist) continue;
-            
-            // Calculate opacity based on how far along the line we are
-            // Lines are drawn more opaque (darker) as they get "older"
-            const distanceFactor = Math.max(0, 1 - (endX / maxDist));
-            const opacity = 0.3 + distanceFactor * 0.7;
-            
-            // Add slight randomness to jitter based on position
-            const jitterAmount = 2 + distanceFactor * 4;
-            
-            // Draw the line segment
-            drawSketchyLine(
-                startX, y, 
-                endX, y, 
-                2, 
-                '#c0c0ff', 
-                opacity,
-                jitterAmount
-            );
-        }
-    }
-    
-    // Draw vertical lines (more subtle)
-    const totalVerticals = 32;
-    for (let i = 0; i < totalVerticals; i++) {
-        const x = 32 + i * 32;
-        
-        // Only draw vertical lines up to the drawing progress
-        if (x > canvas.width * drawingProgress) continue;
-        
-        // Calculate opacity - fade in based on "age"
-        const distanceFactor = Math.max(0, 1 - (x / (canvas.width * drawingProgress)));
-        const opacity = 0.1 + distanceFactor * 0.3;
-        
-        drawSketchyLine(
-            x, 0,
-            x, canvas.height,
-            1,
-            '#e8e8ff',
-            opacity,
-            4
-        );
-    }
-    
-    // Draw red margin line (if within drawing progress)
-    if (64 < canvas.width * drawingProgress) {
-        drawSketchyLine(
-            64, 0,
-            64, canvas.height,
-            3,
-            '#ffb0b0',
-            0.7,
-            5
-        );
-    }
-    
-    // Add some pencil smudges
-    const smudgeCount = Math.floor(20 * drawingProgress);
-    for (let i = 0; i < smudgeCount; i++) {
-        const x = Math.random() * canvas.width * drawingProgress;
+    console.log("[texture-generator] createHandDrawnPaperTexture: Filled with paper color.");
+
+    // 2. Add subtle noise/texture for an aged/paper look
+    const numSpecks = 2500;
+    ctx.fillStyle = speckleColor;
+    for (let i = 0; i < numSpecks; i++) {
+        const x = Math.random() * canvas.width;
         const y = Math.random() * canvas.height;
-        
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.03)';
+        const size = Math.random() * 1.8; // Slightly larger specks might look more like paper fibers
         ctx.beginPath();
-        
-        const size = 2 + Math.random() * 5;
         ctx.arc(x, y, size, 0, Math.PI * 2);
         ctx.fill();
     }
-    
-    // Create and configure the texture
+    console.log("[texture-generator] createHandDrawnPaperTexture: Added paper grain specks.");
+
+
     const texture = new THREE.CanvasTexture(canvas);
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
-    texture.repeat.set(1, 5);
-    
-    return texture;
-}
+    // The actual repeat scaling will be handled in environment.js based on segment size
+    texture.needsUpdate = true;
 
-// Generate a "sketch-in-progress" version of a texture
-export function createSketchInProgressTexture(baseTexture, progress) {
-    if (!baseTexture.image) return baseTexture;
-    
-    // Create a new canvas to modify the texture
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    
-    // Match size of original texture
-    canvas.width = baseTexture.image.width;
-    canvas.height = baseTexture.image.height;
-    
-    // Draw the original texture
-    ctx.drawImage(baseTexture.image, 0, 0);
-    
-    // Add a semi-transparent overlay to make it look sketchy/incomplete
-    ctx.fillStyle = `rgba(255, 255, 255, ${1 - progress})`;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-    // Add some random sketch lines that appear as it's being drawn
-    if (progress > 0.1) {
-        ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
-        ctx.lineWidth = 1;
-        
-        const numLines = Math.floor(10 * progress);
-        for (let i = 0; i < numLines; i++) {
-            const startX = Math.random() * canvas.width;
-            const startY = Math.random() * canvas.height;
-            const length = 10 + Math.random() * 30;
-            const angle = Math.random() * Math.PI * 2;
-            
-            ctx.beginPath();
-            ctx.moveTo(startX, startY);
-            ctx.lineTo(
-                startX + Math.cos(angle) * length,
-                startY + Math.sin(angle) * length
-            );
-            ctx.stroke();
-        }
-    }
-    
-    // Create a new texture from the modified canvas
-    const newTexture = new THREE.CanvasTexture(canvas);
-    
-    // Copy properties from original texture
-    newTexture.wrapS = baseTexture.wrapS;
-    newTexture.wrapT = baseTexture.wrapT;
-    newTexture.repeat.copy(baseTexture.repeat);
-    
-    return newTexture;
+    console.log("[texture-generator] createHandDrawnPaperTexture: Returning texture object:", texture);
+    return texture;
 }

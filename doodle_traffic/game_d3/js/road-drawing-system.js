@@ -14,589 +14,440 @@ export class RoadDrawingSystem {
         
         // Configuration
         this.segmentLength = 40;     // Length of each segment
-        this.roadWidth = 5;          // Width of the road
-        this.visibleSegments = 3;    // How many segments to show ahead (including flying-in)
-        this.segmentsBehind = 4;     // How many segments to keep behind
+        this.roadWidth = 6.0; // ADJUSTED: Reduced road width slightly
+        this.visibleSegments = 3;
+        this.segmentsBehind = 4;
+
         
         // Animation parameters
-        this.flyInDistance = 30;     // How far below segments start
-        this.flyInDuration = 0.8;    // How long it takes for segments to fly in (seconds)
+        this.flyInDistance = 30;
+        this.flyInDuration = 0.8;
         
-        // Road position tracking
         this.currentX = 0;
         this.currentZ = 0;
-        this.currentAngle = 0;       // Direction the road is facing (radians)
+        this.currentAngle = 0;
         
-        // Segment generation controls
-        this.turnCounter = 0;
-        this.segmentCounter = 0;
-        this.straightSegmentsBeforeTurn = 8;
+        this.debug = true; 
+        this.zAtLastGeneration = 0; 
+        this.minSpeedForGeneration = 1.0; 
+
+        this.generatedGreyEdgeTexture = this.createGreyEdgeTexture(); // Create the new texture
+
+        this.greyEdgeMaterial = new THREE.MeshStandardMaterial({
+            map: this.generatedGreyEdgeTexture, // Use the texture
+            color: 0xffffff, // Set to white so texture color shows accurately
+            roughness: 0.9,
+            metalness: 0.1,
+            flatShading: true
+        });
         
-        // Debug mode
-        this.debug = true;
-
-        this.zAtLastGeneration = 0; // Or initialize to starting player Z in init()
-        this.minSpeedForGeneration = 1.0; // Minimum speed for segment generation
-
+        this.darkMarginMaterial = new THREE.MeshStandardMaterial({
+            color: 0x202020, // Dark color for margins (almost black)
+            roughness: 0.8,
+            metalness: 0.0,
+            flatShading: true
+        });
     }
     
     init() {
-        console.log("Initializing simplified road system");
-        
-        // Generate initial segments
+        console.log("Initializing road drawing system (Aesthetic Update 2 - 3D Edges)");
         this.generateInitialSegments();
     }
     
-    // Create a new road segment
     createSegment(type, startX = 0, startZ = 0, startAngle = 0) {
         let segment;
         
-        // Check if we can recycle a segment from the pool
         if (this.segmentPool.length > 0) {
             segment = this.segmentPool.pop();
+            segment.visible = true; // Make sure it's visible when reused
             segment.userData.type = type;
-            
-            // Reset position
-            segment.position.set(startX, 0, startZ);
+            segment.position.set(startX, 0, startZ); 
             segment.rotation.y = startAngle;
-            
-            // Clear any children
-            while (segment.children.length > 0) {
-                segment.remove(segment.children[0]);
+            while(segment.children.length > 0){ 
+                const child = segment.children[0];
+                segment.remove(child);
+                if (child.geometry) child.geometry.dispose();
+                // Materials are shared, so no need to dispose them here
             }
-            
-            // Rebuild segment
             this.buildSegmentContent(segment, type);
         } else {
-            // Create a new segment group
             segment = new THREE.Group();
             segment.userData.type = type;
             segment.userData.isRoadSegment = true;
             segment.userData.length = this.segmentLength;
-            
-            // Set initial position
-            segment.position.set(startX, 0, startZ);
+            segment.position.set(startX, 0, startZ); 
             segment.rotation.y = startAngle;
-            
-            // Build content
             this.buildSegmentContent(segment, type);
         }
         
-        // Add to scene
         this.scene.add(segment);
-        
-        if (this.debug) {
-            console.log(`Created segment of type ${type} at x:${startX.toFixed(2)}, z:${startZ.toFixed(2)}`);
-        }
-        
         return segment;
     }
     
-    // Build the road segment visuals
     buildSegmentContent(segment, type) {
-        // Create road geometry based on segment type
         let roadGeometry;
         
         switch(type) {
-            case 'left_turn':
-                roadGeometry = this.createCurvedRoadGeometry(true);  // Left turn
-                break;
-            case 'right_turn':
-                roadGeometry = this.createCurvedRoadGeometry(false);  // Right turn
-                break;
             case 'straight':
             default:
                 roadGeometry = new THREE.PlaneGeometry(
                     this.roadWidth, 
                     this.segmentLength,
-                    10, 10
+                    1, 1 
                 );
                 break;
         }
         
-        // Create notebook paper texture
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
-        canvas.width = 512;
-        canvas.height = 512;
-        
-        // Fill with off-white color
-        ctx.fillStyle = '#f8f8f8';
+        const textureSize = 256; 
+        canvas.width = textureSize;
+        canvas.height = textureSize;
+
+        ctx.fillStyle = '#5fbde4'; // Road surface color from previous update, teal color
         ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        // Draw grid lines
-        ctx.strokeStyle = '#d0d0d0';
-        ctx.lineWidth = 1;
-        
-        // Horizontal lines
-        const lineSpacing = 32;
-        for (let y = 0; y < canvas.height; y += lineSpacing) {
+
+        const numSpecks = 500;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.08)'; 
+        for (let i = 0; i < numSpecks; i++) {
+            const x = Math.random() * canvas.width;
+            const y = Math.random() * canvas.height;
+            const size = Math.random() * 1.5;
+            ctx.fillRect(x, y, size, size);
+        }
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.03)'; 
+        for (let i = 0; i < numSpecks / 2; i++) {
+            const x = Math.random() * canvas.width;
+            const y = Math.random() * canvas.height;
+            const size = Math.random() * 1;
+            ctx.fillRect(x, y, size, size);
+        }
+
+        ctx.strokeStyle = '#ffffff'; 
+        ctx.lineWidth = 1; 
+        const lineSpacing = textureSize / (this.roadWidth > 0 ? Math.max(1, Math.floor(this.roadWidth)) : 10) ; // Dynamic grid based on roadwidth
+
+        for (let i = 0; i <= Math.max(1, Math.floor(this.roadWidth)); i++) { // Dynamic grid
+            const xPos = i * lineSpacing;
+             // Vertical lines
             ctx.beginPath();
-            ctx.moveTo(0, y);
-            ctx.lineTo(canvas.width, y);
+            ctx.moveTo(xPos, 0);
+            ctx.lineTo(xPos, canvas.height);
+            ctx.stroke();
+        }
+        const numHorizontalLines = Math.floor(this.segmentLength / (textureSize / lineSpacing)); // Approx
+         for (let i = 0; i <= numHorizontalLines; i++) {
+            const yPos = i * lineSpacing;
+             // Horizontal lines
+            ctx.beginPath();
+            ctx.moveTo(0, yPos);
+            ctx.lineTo(canvas.width, yPos);
             ctx.stroke();
         }
         
-        // Vertical lines
-        for (let x = 0; x < canvas.width; x += lineSpacing) {
-            ctx.beginPath();
-            ctx.moveTo(x, 0);
-            ctx.lineTo(x, canvas.height);
-            ctx.stroke();
-        }
-        
-        // Create texture from canvas
         const texture = new THREE.CanvasTexture(canvas);
         texture.wrapS = THREE.RepeatWrapping;
         texture.wrapT = THREE.RepeatWrapping;
-        texture.repeat.set(1, this.segmentLength / 20);
-        
-        // Create material
+        texture.repeat.set(1, this.segmentLength / (this.roadWidth / (textureSize/lineSpacing)) / (textureSize/lineSpacing) ); // Try to make grid squares somewhat square
+        // A simpler approach for repeat if grid squares are meant to be ~1x1 world units:
+        // texture.repeat.set(this.roadWidth / GRID_SQUARE_WORLD_SIZE, this.segmentLength / GRID_SQUARE_WORLD_SIZE);
+        // For now, let's use a fixed number of repeats based on texture drawing
+        const desiredGridSquaresAcrossRoad = this.roadWidth; // e.g. if roadWidth is 6, show 6 grid lines from texture
+        const desiredGridSquaresAlongSegment = this.segmentLength / (this.roadWidth / desiredGridSquaresAcrossRoad) ; // Maintain aspect ratio
+        texture.repeat.set(desiredGridSquaresAcrossRoad / (textureSize/lineSpacing) , desiredGridSquaresAlongSegment/ (textureSize/lineSpacing));
+
+
         const roadMaterial = new THREE.MeshStandardMaterial({
             map: texture,
             side: THREE.DoubleSide,
-            roughness: 0.8,
-            metalness: 0.2
+            roughness: 0.9, 
+            metalness: 0.1  
         });
         
-        // Create road surface
         const roadSurface = new THREE.Mesh(roadGeometry, roadMaterial);
-        roadSurface.rotation.x = -Math.PI / 2;  // Lay flat
-        roadSurface.position.y = 0;
-        roadSurface.receiveShadow = true;
-        
-        // Position adjustment for curved segments
-        if (type === 'left_turn' || type === 'right_turn') {
-            roadSurface.position.z = 0;
-            roadSurface.position.x = 0;
-        } else {
-            roadSurface.position.z = this.segmentLength / 2;
-        }
+        roadSurface.rotation.x = -Math.PI / 2;
+        roadSurface.receiveShadow = true; 
+        roadSurface.position.y = 0; 
+        roadSurface.position.z = this.segmentLength / 2; 
         
         segment.add(roadSurface);
-        
-        // Add simple road markings
         this.addRoadMarkings(segment, type);
-        
-        // Store reference for animations
         segment.userData.roadSurface = roadSurface;
     }
     
-    // Create curved road geometry for turns
-    createCurvedRoadGeometry(isLeftTurn) {
-        const radius = this.segmentLength / 2;
-        const segments = 20;
-        
-        const roadGeometry = new THREE.PlaneGeometry(
-            this.roadWidth,
-            this.segmentLength,
-            20,
-            20
-        );
-        
-        const position = roadGeometry.getAttribute('position');
-        
-        // Deform the plane into a curved road
-        for (let i = 0; i < position.count; i++) {
-            const x = position.getX(i);
-            const z = position.getZ(i);
-            
-            const t = (z + this.segmentLength/2) / this.segmentLength;
-            const angle = t * Math.PI/2;
-            
-            let newX, newZ;
-            
-            if (isLeftTurn) {
-                newX = x + radius * (Math.cos(angle) - 1);
-                newZ = radius * Math.sin(angle);
-            } else {
-                newX = x + radius * (1 - Math.cos(angle));
-                newZ = radius * Math.sin(angle);
-            }
-            
-            position.setX(i, newX);
-            position.setZ(i, newZ);
-        }
-        
-        position.needsUpdate = true;
-        roadGeometry.computeVertexNormals();
-        
-        return roadGeometry;
-    }
-    
-    // Add simple road markings to a segment
     addRoadMarkings(segment, type) {
-        // Material for lane markings
-        const lineMaterial = new THREE.MeshStandardMaterial({ 
-            color: 0x333333,
-            roughness: 0.7, 
-            metalness: 0.1
+        // Shared material for center lines (keeping dark)
+        const centerLineMaterial = new THREE.MeshStandardMaterial({
+            color: 0x333333, // Dark Charcoal
+            roughness: 0.95,
+            metalness: 0.05,
+            // flatShading: true
         });
-        
-        // Add markings based on segment type
-        if (type === 'left_turn' || type === 'right_turn') {
-            this.addCurvedMarkings(segment, type === 'left_turn', lineMaterial);
-        } else {
-            this.addStraightMarkings(segment, lineMaterial);
-        }
+
+        // Call addStraightBoundaryLines to create the grey edges
+        this.addStraightBoundaryLines(segment); // We are creating the material inside that function now
+        this.addStraightCenterLines(segment, centerLineMaterial);
     }
-    
-    // Add markings for straight road segments
-    addStraightMarkings(segment, material) {
-        const width = 0.1;
+
+    addStraightBoundaryLines(segment) { // Parameter 'material' is no longer passed/used here
         const length = this.segmentLength;
-        
-        // Left edge
-        const leftEdgeGeometry = new THREE.PlaneGeometry(width, length);
-        const leftEdge = new THREE.Mesh(leftEdgeGeometry, material);
-        leftEdge.position.set(-this.roadWidth/2, 0.01, length/2);
-        leftEdge.rotation.x = -Math.PI / 2;
-        segment.add(leftEdge);
-        
-        // Right edge
-        const rightEdgeGeometry = new THREE.PlaneGeometry(width, length);
-        const rightEdge = new THREE.Mesh(rightEdgeGeometry, material);
-        rightEdge.position.set(this.roadWidth/2, 0.01, length/2);
-        rightEdge.rotation.x = -Math.PI / 2;
-        segment.add(rightEdge);
-        
-        // Center dashed lines
-        const centerLineSpacing = 2;
-        const centerLineDash = 1;
-        const totalLines = Math.floor(length / (centerLineSpacing + centerLineDash));
-        
-        for (let i = 0; i < totalLines; i++) {
-            const z = i * (centerLineSpacing + centerLineDash) + centerLineDash/2;
-            const centerLineGeometry = new THREE.PlaneGeometry(width, centerLineDash);
-            const centerLine = new THREE.Mesh(centerLineGeometry, material);
-            centerLine.position.set(0, 0.01, z);
-            centerLine.rotation.x = -Math.PI / 2;
-            segment.add(centerLine);
-        }
-    }
+        const halfRoadWidth = this.roadWidth / 2;
     
-    // Add simple curved markings
-    addCurvedMarkings(segment, isLeftTurn, material) {
-        const radius = this.segmentLength / 2;
-        
-        // Add edge lines
-        const edges = [
-            { radius: radius + this.roadWidth/2, isInner: false },
-            { radius: radius - this.roadWidth/2, isInner: true }
-        ];
-        
-        edges.forEach(edge => {
-            const points = [];
-            const segments = 20;
-            
-            for (let i = 0; i <= segments; i++) {
-                const angle = (i / segments) * Math.PI / 2;
-                let x, z;
-                
-                if (isLeftTurn) {
-                    x = edge.radius * Math.cos(angle) - edge.radius;
-                    z = edge.radius * Math.sin(angle);
-                } else {
-                    x = edge.radius - edge.radius * Math.cos(angle);
-                    z = edge.radius * Math.sin(angle);
-                }
-                
-                points.push(new THREE.Vector3(x, 0.01, z));
-            }
-            
-            const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
-            const line = new THREE.Line(lineGeometry, material);
-            segment.add(line);
+        const greyEdgeStripWidth = 0.6;  // Width of the grey part of the edge (X-direction)
+        const greyEdgeStripHeight = 0.05; // Height of the grey part (Y-direction)
+    
+        const darkMarginLineWidth = 0.08;  // Width of the dark margin line (X-direction on top of grey strip)
+        const darkMarginLineHeight = 0.01; // Thickness/Height of the dark margin line itself (Y-direction)
+    
+        const greyEdgeGeometry = new THREE.BoxGeometry(greyEdgeStripWidth, greyEdgeStripHeight, length);
+        const darkMarginGeometry = new THREE.BoxGeometry(darkMarginLineWidth, darkMarginLineHeight, length);
+
+    
+        // Center X offset for the grey strips from the road's centerline
+        const greyStripCenterOffsetX = halfRoadWidth + greyEdgeStripWidth / 2;
+    
+        const sides = [-1, 1]; // -1 for left, 1 for right
+    
+        sides.forEach(sideSign => {
+            const greyStripPosX = sideSign * greyStripCenterOffsetX;
+            const greyRoadEdgeMesh = new THREE.Mesh(greyEdgeGeometry, this.greyEdgeMaterial);
+            greyRoadEdgeMesh.position.set(greyStripPosX, greyEdgeStripHeight / 2, length / 2);
+            // greyRoadEdgeMesh.castShadow = true; // Optional, uncomment if desired
+            segment.add(greyRoadEdgeMesh);
+    
+            // Uses the pre-created this.darkMarginMaterial from the constructor
+            // Y position for the center of the margin lines, placing them on top of the grey strip
+            const marginCenterY = greyEdgeStripHeight + (darkMarginLineHeight / 2);
+    
+            // Inner margin (closer to the main road surface)
+            // Its X center is at the inner edge of the grey strip.
+            const innerMarginPosX = greyStripPosX - (sideSign * (greyEdgeStripWidth / 2)) + (sideSign * (darkMarginLineWidth / 2));
+            const innerMarginMesh = new THREE.Mesh(darkMarginGeometry, this.darkMarginMaterial);
+            innerMarginMesh.position.set(innerMarginPosX, marginCenterY, length / 2);
+            segment.add(innerMarginMesh);
+    
+            // Outer margin (further from the main road surface)
+            // Its X center is at the outer edge of the grey strip.
+            const outerMarginPosX = greyStripPosX + (sideSign * (greyEdgeStripWidth / 2)) - (sideSign * (darkMarginLineWidth / 2));
+            const outerMarginMesh = new THREE.Mesh(darkMarginGeometry, this.darkMarginMaterial);
+            outerMarginMesh.position.set(outerMarginPosX, marginCenterY, length / 2);
+            segment.add(outerMarginMesh);
         });
-        
-        // Add center dashed line
-        const dashLength = 1;
-        const gapLength = 2;
-        const totalLength = Math.PI * radius / 2;
-        const totalDashes = Math.floor(totalLength / (dashLength + gapLength));
-        
-        for (let i = 0; i < totalDashes; i++) {
-            const startAngle = (i * (dashLength + gapLength)) / totalLength * Math.PI / 2;
-            const endAngle = ((i * (dashLength + gapLength)) + dashLength) / totalLength * Math.PI / 2;
-            
-            if (endAngle > Math.PI/2) continue;
-            
-            const points = [];
-            const dashSegments = 5;
-            
-            for (let j = 0; j <= dashSegments; j++) {
-                const angle = startAngle + (j / dashSegments) * (endAngle - startAngle);
-                let x, z;
-                
-                if (isLeftTurn) {
-                    x = radius * Math.cos(angle) - radius;
-                    z = radius * Math.sin(angle);
-                } else {
-                    x = radius - radius * Math.cos(angle);
-                    z = radius * Math.sin(angle);
-                }
-                
-                points.push(new THREE.Vector3(x, 0.01, z));
-            }
-            
-            const dashGeometry = new THREE.BufferGeometry().setFromPoints(points);
-            const dash = new THREE.Line(dashGeometry, material);
-            segment.add(dash);
+    }
+
+    addStraightCenterLines(segment, material) {
+        const dashWidth = 0.30; // Slightly adjusted
+        const dashLength = 2.5; 
+        const gapLength = 3.5;  
+        const dashThickness = 0.05; // Give center dashes a slight thickness too
+        const segmentLength = this.segmentLength;
+        let currentZ = dashLength / 2; 
+
+        const centerDashGeom = new THREE.BoxGeometry(dashWidth, dashThickness, dashLength);
+
+        while (currentZ < segmentLength) {
+            const centerLine = new THREE.Mesh(centerDashGeom, material);
+            centerLine.position.set(0, dashThickness / 2, currentZ); 
+            centerLine.castShadow = true; // Optional
+            segment.add(centerLine);
+            currentZ += dashLength + gapLength;
         }
     }
     
-    // Generate initial road segments
+    // --- UNCHANGED METHODS BELOW (generateInitialSegments, generateNextSegment, update, createCurvedRoadGeometry, etc.) ---
+    // Kept for potential future use, but not called if only straight segments are generated
+    createCurvedRoadGeometry(isLeftTurn) {
+        const radius = this.segmentLength / 2; 
+        const curveAngle = Math.PI / 2; 
+
+        const roadPlaneGeometry = new THREE.PlaneGeometry(
+            this.roadWidth,
+            this.segmentLength, 
+            20, 
+            20  
+        );
+
+        const positionAttribute = roadPlaneGeometry.getAttribute('position');
+        const tempVec = new THREE.Vector3();
+
+        for (let i = 0; i < positionAttribute.count; i++) {
+            tempVec.fromBufferAttribute(positionAttribute, i);
+            const t = (tempVec.y + this.segmentLength / 2) / this.segmentLength; 
+            const actualAngle = t * curveAngle; 
+            const curveCenterX = isLeftTurn ? radius : -radius;
+            const xOffset = tempVec.x; 
+            const centerlineX = curveCenterX - Math.cos(actualAngle) * radius * (isLeftTurn ? 1 : -1);
+            const centerlineZ = Math.sin(actualAngle) * radius;
+            positionAttribute.setX(i, centerlineX - xOffset * Math.sin(actualAngle) * (isLeftTurn ? 1 : -1) );
+            positionAttribute.setZ(i, centerlineZ + xOffset * Math.cos(actualAngle) ); 
+            positionAttribute.setY(i, 0); 
+        }
+        roadPlaneGeometry.attributes.position.needsUpdate = true;
+        roadPlaneGeometry.computeVertexNormals(); 
+        return roadPlaneGeometry;
+    }
+    
+    addCurvedBoundaryLines(segment, isLeftTurn, material) {
+        console.warn("addCurvedBoundaryLines with thick boxes is complex and not fully implemented for aesthetics.");
+    }
+
+    addCurvedCenterLines(segment, isLeftTurn, material) {
+        console.warn("addCurvedCenterLines with thick boxes is complex and not fully implemented for aesthetics.");
+    }
+    
     generateInitialSegments() {
-        const totalInitialSegments = this.visibleSegments + this.segmentsBehind - 1;
-        // Start with segments behind (already complete)
-        for (let i = 0; i < this.segmentsBehind; i++) {
-            const z = this.segmentsBehind * this.segmentLength - i * this.segmentLength;
-            const segment = this.createSegment('straight', 0, z, 0);
+        const totalInitialSegments = this.visibleSegments + this.segmentsBehind;
+        this.currentZ = (this.segmentsBehind) * this.segmentLength; 
+
+        for (let i = 0; i < totalInitialSegments; i++) {
+            const segmentType = 'straight'; 
+            const zPos = this.currentZ - i * this.segmentLength;
+            const segment = this.createSegment(segmentType, this.currentX, zPos, this.currentAngle);
             
-            // These segments are already complete
-            segment.userData.state = SegmentState.COMPLETE;
-            
-            // Add to segments array
+            if (i < this.segmentsBehind + this.visibleSegments -1) { 
+                 segment.userData.state = SegmentState.COMPLETE;
+                 segment.position.y = 0;
+            } else { 
+                segment.userData.state = SegmentState.FLYING_IN;
+                segment.userData.animationStart = performance.now() / 1000;
+                segment.position.y = -this.flyInDistance;
+            }
             this.segments.push(segment);
         }
+        this.currentZ -= totalInitialSegments * this.segmentLength; 
+        this.zAtLastGeneration = this.currentZ + this.segmentLength; 
         
-        // Then add visible segments ahead (except the last one)
-        for (let i = 0; i < this.visibleSegments - 1; i++) {
-            const z = -i * this.segmentLength;
-            const segment = this.createSegment('straight', 0, z, 0);
-            
-            // These segments are already complete
-            segment.userData.state = SegmentState.COMPLETE;
-            
-            // Add to segments array
-            this.segments.push(segment);
+        if (this.debug) {
+            // console.log(`Generated ${this.segments.length} initial segments. Next segment will start at Z: ${this.currentZ.toFixed(2)}`);
         }
-        
-        // Add the last segment as flying-in
-        const lastZ = -(this.visibleSegments - 1) * this.segmentLength;
-        const lastSegment = this.createSegment('straight', 0, lastZ, 0);
-        
-        // Set this segment to fly in
-        lastSegment.userData.state = SegmentState.FLYING_IN;
-        lastSegment.userData.animationStart = performance.now() / 1000;
-        lastSegment.position.y = -this.flyInDistance;  // Start below ground
-        
-        // Add to segments array
-        this.segments.push(lastSegment);
-        
-        console.log(`Generated ${totalInitialSegments + 1} initial segments, last one is flying in`);
     }
     
-    // Generate the next road segment ahead
     generateNextSegment() {
-        console.log(`generateNextSegment called. Current segment count: ${this.segments.length}`);
-
-        // Ensure segments array is not empty
         if (this.segments.length === 0) {
-            console.error("!!! ERROR: generateNextSegment called with empty segments array!");
-            return;
+            // console.error("generateNextSegment called with empty segments array! Re-initializing.");
+            this.generateInitialSegments(); 
+            if (this.segments.length === 0) return null; 
         }
 
-        // Get the last segment
         const lastSegment = this.segments[this.segments.length - 1];
-
-        // Basic check for lastSegment validity
         if (!lastSegment || typeof lastSegment.position === 'undefined') {
-            console.error("!!! ERROR: lastSegment is invalid!", lastSegment);
-            return;
+            // console.error("lastSegment is invalid in generateNextSegment!", lastSegment);
+            return null;
         }
 
-        // --- SIMPLIFICATION START ---
-        // Force segment type to straight
         const nextType = 'straight';
-
-        // Calculate position based *only* on the last segment being straight
-        let startX = lastSegment.position.x; // Keep X the same for straight road
-        let startZ = lastSegment.position.z - this.segmentLength; // Ensure Z decreases
-        let startAngle = lastSegment.rotation.y; // Keep angle the same
-
-        // Remove all logic related to turn counters, lastType checks, and turn adjustments
-        // this.segmentCounter++; // No longer needed
-        // if (this.segmentCounter >= ...) { ... } // Remove turn triggering
-        // if (lastType === 'left_turn') { ... } // Remove left turn adjustment block
-        // if (lastType === 'right_turn') { ... } // Remove right turn adjustment block
-        // --- SIMPLIFICATION END ---
-
-
-        // Create the new segment (will always be 'straight')
-        const newSegment = this.createSegment(nextType, startX, startZ, startAngle);
-
-        // Set as flying in
+        const newSegment = this.createSegment(nextType, this.currentX, this.currentZ, this.currentAngle);
         newSegment.userData.state = SegmentState.FLYING_IN;
         newSegment.userData.animationStart = performance.now() / 1000;
-        // --- Temporarily keep Y set for fly-in ---
-        newSegment.position.y = -this.flyInDistance;  // Start below ground
+        newSegment.position.y = -this.flyInDistance; 
 
-
-        // Logging (ensure lastSegment properties are accessed safely if needed)
-        console.log(">>> GENERATING NEW SEGMENT (Straight Only) <<<", {
-            lastSegmentZ: lastSegment.position.z,
-            generatedType: nextType, // Will always be 'straight'
-            generatedStartZ: startZ
-        });
-        console.log(`>>> New segment INITIAL Y: ${newSegment.position.y}`);
-
-
-        // Add to segments array
         this.segments.push(newSegment);
+        this.currentZ -= this.segmentLength; 
 
-        console.log(`>>> Segment pushed. Total segments: ${this.segments.length}`);
-
+        if (this.debug && Math.random() < 0.1) { 
+            // console.log(`Generated next segment. Total: ${this.segments.length}. New segment at Z: ${(this.currentZ + this.segmentLength).toFixed(2)}. Next will be at Z: ${this.currentZ.toFixed(2)}`);
+        }
         return newSegment;
     }
-    
-    
-    // Update system based on player position
-    update(playerZ, playerSpeed, deltaTime) {
+        
+    update(playerZ, playerSpeed, deltaTime) { 
         const currentTime = performance.now() / 1000;
-        const removalThresholdZ = playerZ + (this.segmentsBehind * this.segmentLength);
-        console.log(`>>>>>>>>>> Removal Threshold Z: ${removalThresholdZ.toFixed(2)}, playerZ=${playerZ.toFixed(2)}, segmentsBehind=${this.segmentsBehind.toFixed(2)}, segmentLength=${this.segmentLength.toFixed(2)}`);
-        // Check if we need to remove old segments behind
-        if (this.segments.length > 0) {
-            // Keep removing segments that are too far behind the player
-            while (this.segments.length > this.visibleSegments + this.segmentsBehind && // Ensure we don't remove too many
-                this.segments[0].position.z > removalThresholdZ)
-            {
-                console.log(`✅ REMOVING segment at Z=${this.segments[0].position.z.toFixed(2)} (PlayerZ=${playerZ.toFixed(2)}, RemovalThresholdZ=${removalThresholdZ.toFixed(2)})`);
-                const oldSegment = this.segments.shift();
-                
-                // Move to pool for recycling
-                this.scene.remove(oldSegment);
-                this.segmentPool.push(oldSegment);
-                
-                if (this.debug) {
-                    console.log("Removed old segment, recycled to pool");
-                }
+        const removalThresholdZ = playerZ + (this.segmentsBehind + 0.5) * this.segmentLength; 
+    
+        while (this.segments.length > 0 && (this.segments[0].position.z + this.segmentLength / 2) > removalThresholdZ) {
+            if (this.segments.length <= this.visibleSegments + this.segmentsBehind -1 && this.segments.length <=1 ) break; 
+            
+            const oldSegment = this.segments.shift();
+            oldSegment.visible = false; 
+            this.segmentPool.push(oldSegment);
+            if (this.debug && Math.random() < 0.05) {
+                // console.log(`Recycled segment. Pool size: ${this.segmentPool.length}. Active: ${this.segments.length}`);
             }
         }
-        
-        // Check if we need to generate a new segment ahead
+    
         if (this.segments.length > 0) {
             const lastSegment = this.segments[this.segments.length - 1];
-            const lastSegmentEndZ = lastSegment.position.z - this.segmentLength; // Middle of last segment approx end
-            // OR more simply: just check segment origin Z
-            // const lastSegmentEndZ = lastSegment.position.z;
-            const generationHorizonZ = playerZ - (this.visibleSegments - 1) * this.segmentLength;
-
-            // Condition 1: Is player moving fast enough?
-            const isFastEnough = playerSpeed > this.minSpeedForGeneration;
-
-            // Condition 2: Is the current last segment beyond the horizon?
-            const needsMoreSegmentsPositional = lastSegment.position.z > generationHorizonZ;
-
-             // --- Condition 3: Has player entered a new segment zone since last generation? ---
-            const currentSegmentZoneIndex = Math.floor(Math.abs(playerZ / this.segmentLength));
-            const lastGenSegmentZoneIndex = Math.floor(Math.abs(this.zAtLastGeneration / this.segmentLength));
-            const hasEnteredNewSegmentZone = currentSegmentZoneIndex !== lastGenSegmentZoneIndex;
-            // ---
-    
-            // Corrected condition: Generate if last segment Z is 'behind' (greater Z) the horizon
-            // const shouldGenerate = lastSegment.position.z < generationHorizonZ;
-
-            // Combine all conditions
-            const shouldGenerate = isFastEnough && needsMoreSegmentsPositional && hasEnteredNewSegmentZone;
-            console.log(`>>> ShouldGenerate: ${shouldGenerate} ` +
-                        `lastSegment.pos.z=${lastSegment.position.z.toFixed(2)}, ` +
-                        `horizonZ=${generationHorizonZ.toFixed(2)} 
-                        playerZ=${playerZ.toFixed(2)}
-                        playerSpeed=${playerSpeed.toFixed(2)}
-                        isFastEnough=${isFastEnough}
-                        needsMoreSegmentsPositional=${needsMoreSegmentsPositional}
-                        hasEnteredNewSegmentZone=${hasEnteredNewSegmentZone}`);
-    
-            // Log the check values
-            // console.log(`Update Check: playerZ=${playerZ.toFixed(2)}, ` +
-            //             `lastSegment.pos.z=${lastSegment.position.z.toFixed(2)}, ` +
-            //             // `lastSegmentEndZ=${lastSegmentEndZ.toFixed(2)}, ` + // Using simpler check now
-            //             `horizonZ=${generationHorizonZ.toFixed(2)}, ` +
-            //             `ShouldGenerate=${shouldGenerate}`);
-    
-    
-            if (shouldGenerate) {
-                console.log(">>> Condition Met - Calling generateNextSegment() <<<");
-                const newSegment = this.generateNextSegment();
-
-                 // Update Z tracker *only* after successful generation
-                if (newSegment) {
-                    this.zAtLastGeneration = playerZ;
-                    // If using totalSegmentsGenerated counter (alternative GPS), increment here:
-                    // this.totalSegmentsGenerated++;
+            const generationTriggerZ = playerZ - (this.visibleSegments - 1.5) * this.segmentLength;
+            if (lastSegment.position.z > generationTriggerZ && playerSpeed > this.minSpeedForGeneration) {
+                if (this.currentZ > generationTriggerZ - this.segmentLength) { 
+                     this.generateNextSegment();
+                     this.zAtLastGeneration = this.currentZ + this.segmentLength; 
                 }
             }
-    
+        } else {
+            if (this.debug) console.log("No segments exist, attempting to generate initial set.");
+            this.generateInitialSegments(); 
         }
-        
-        // Update flying-in animation for any segments in that state
-        this.segments.forEach((segment, index) => {
+    
+        this.segments.forEach((segment) => {
+            if (!segment.visible && this.segmentPool.indexOf(segment) === -1) { 
+                segment.visible = true;
+            }
             if (segment.userData.state === SegmentState.FLYING_IN) {
-                // Using deltaTime for frame-rate independent animation
-                const startTime = segment.userData.animationStart;
-                const currentTime = performance.now() / 1000;
-                const elapsedTime = currentTime - startTime;
-                
-                // Store animation speed to allow faster/slower animation based on player speed
-                // Higher deltaTime = more movement per frame
-                const animationSpeed = 1.0 * deltaTime * 60; // Normalize for 60fps
-                
-                // GOogle telling to comment it ---
-                // Calculate animation progress
-                // Using a mix of elapsed time and delta time for smoother animation
-                // let progress;
-                
-                /* if (!segment.userData.lastProgress) {
-                    // First update for this segment
-                    progress = Math.min(elapsedTime / this.flyInDuration, 1.0);
-                    segment.userData.lastProgress = progress;
-                } else {
-                    // Calculate how much to move this frame based on deltaTime
-                    const progressIncrement = (animationSpeed / this.flyInDuration);
-                    progress = Math.min(segment.userData.lastProgress + progressIncrement, 1.0);
-                    segment.userData.lastProgress = progress;
-                } */
-
+                const elapsedTime = currentTime - segment.userData.animationStart;
                 const progress = Math.min(elapsedTime / this.flyInDuration, 1.0);
+                const easeOutProgress = 1 - Math.pow(1 - progress, 3); 
                 
-                // Ease-out function for smooth deceleration
-                const easeOutProgress = 1 - Math.pow(1 - progress, 3);
-
-                // --- ADD THIS LOG ---
-                const targetY = -this.flyInDistance + (this.flyInDistance * easeOutProgress);
-                // console.log(`Animating Segment [Index: ${index}, State: ${segment.userData.state}] - ` +
-                //     `Elapsed: ${elapsedTime.toFixed(2)}s, ` +
-                //     `Progress: ${progress.toFixed(3)}, ` +
-                //     `Current Y: ${segment.position.y.toFixed(2)}, ` + // <<< Observe this value
-                //     `Target Y: ${targetY.toFixed(2)}`); // <<< Compare with this value
-                // --- END LOG ---
-                
-                // Animate Y position from below to road level
-                segment.position.y = targetY;
-                
-                // Once complete, mark as complete
+                segment.position.y = -this.flyInDistance * (1 - easeOutProgress);
+    
                 if (progress >= 1.0) {
-                    segment.position.y = 0;  // Ensure it's at exactly ground level
+                    segment.position.y = 0;
                     segment.userData.state = SegmentState.COMPLETE;
-                    
                     delete segment.userData.animationStart;
-
-                    if (this.debug) {
-                        console.log(`Segment ${index} completed flying in (took ${elapsedTime.toFixed(2)}s)`);
-                    }
                 }
             }
         });
-        
-        // Debug output occasionally - reduced rate based on deltaTime
-        if (this.debug && Math.random() < 0.01 * deltaTime * 60) {
-            const flyingSegments = this.segments.filter(s => s.userData.state === SegmentState.FLYING_IN);
-            if (flyingSegments.length > 0) {
-                console.log(`Flying segments: ${flyingSegments.length}, at positions:`, 
-                    flyingSegments.map(s => `y=${s.position.y.toFixed(2)}, z=${s.position.z.toFixed(2)}`));
-            }
+    }
+
+    createGreyEdgeTexture() {
+        const canvas = document.createElement('canvas');
+        // Dimensions for the texture canvas.
+        // It will be stretched/repeated on the grey edge's top surface.
+        const textureWidth = 164;  // Represents the width of the grey edge strip
+        const textureHeight = 300; // Represents a portion of the length, will repeat
+        canvas.width = textureWidth;
+        canvas.height = textureHeight;
+        const ctx = canvas.getContext('2d');
+    
+        // Base grey color for the edge strip
+        ctx.fillStyle = '#aaaaaa'; // The desired grey color
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+        // Add small "doodle" lines
+        const numLines = 20; // Adjust for density
+        ctx.strokeStyle = '#000000'; // Black lines
+        ctx.lineWidth = 5;   // Thin lines
+    
+        for (let i = 0; i < numLines; i++) {
+            const x1 = Math.random() * canvas.width;
+            const y1 = Math.random() * canvas.height;
+            const lineLength = Math.random() * 8 + 8; // Line length: 4 to 12 pixels
+            const angle = 0 * Math.PI * 0.5; // Mostly vertical/diagonal-ish lines
+    
+            const x2 = x1 + Math.cos(angle) * lineLength;
+            const y2 = y1 + Math.sin(angle) * lineLength;
+    
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
         }
+    
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+    
+        // How the texture repeats on the top face of the grey edge strip.
+        // The top face is greyEdgeStripWidth wide and segmentLength long.
+        // We want 1 repeat across the width (greyEdgeStripWidth).
+        const repeatsAcross = 1;
+        // We want the texture (textureHeight) to cover, say, 5 world units of length.
+        const worldUnitsCoveredByTextureHeight = 5.0;
+        const repeatsAlong = this.segmentLength / worldUnitsCoveredByTextureHeight;
+    
+        texture.repeat.set(repeatsAcross, repeatsAlong);
+        texture.needsUpdate = true; // Important for canvas textures
+    
+        return texture;
     }
 }

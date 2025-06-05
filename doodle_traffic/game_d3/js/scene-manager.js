@@ -6,6 +6,7 @@ import { createEnvironment, updateGroundSegments, updateEnvironmentElements } fr
 
 // Debug flags
 const DEBUG_SCROLLING = false;
+const TARGET_BACKGROUND_COLOR = '#F5ECCD';
 
 export class SceneManager {
     constructor() {
@@ -25,7 +26,7 @@ export class SceneManager {
         
         // Camera settings - adjusted for better view
         this.cameraHeight = 3.0;           // Slightly higher position
-        this.cameraDistance = 7;           // Increased distance behind player
+        this.cameraDistance = 6;           // Increased distance behind player
         this.lookAheadDistance = 12;       // Reduced look-ahead distance
         this.cameraAngle = 30 * (Math.PI / 180); // 30 degrees in radians - slightly flatter angle
         
@@ -60,14 +61,14 @@ export class SceneManager {
         console.log("Initializing SceneManager");
         // Create scene
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0xf0f0f0); // Light gray background
+        this.scene.background = new THREE.Color(TARGET_BACKGROUND_COLOR); // Light gray background
 
         // Create camera
         this.camera = new THREE.PerspectiveCamera(
-            70, // Wider FOV for better peripheral vision and sense of speed
+            50, // Wider FOV for better peripheral vision and sense of speed
             window.innerWidth / window.innerHeight, // Aspect ratio
             0.1, // Near plane
-            1000 // Far plane
+            200 // Far plane
         );
         
         // Position camera for initial view (will be updated when target is set)
@@ -107,7 +108,7 @@ export class SceneManager {
         this.registerScrollObject(this.environment);
         
         // Add fog for depth perception and sense of distance
-        this.scene.fog = new THREE.Fog(0xf0f0f0, 100, 400);
+        this.scene.fog = new THREE.Fog(TARGET_BACKGROUND_COLOR, 100, 400);
 
         console.log('Scene manager initialized');
     }
@@ -156,11 +157,11 @@ export class SceneManager {
 
     setupLighting() {
         // Add ambient light
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        const ambientLight = new THREE.AmbientLight(0xFFF5E0, 0.55);
         this.scene.add(ambientLight);
 
         // Add directional light (sunlight)
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.7);
+        const directionalLight = new THREE.DirectionalLight(0xFFF8E7, 0.7);
         directionalLight.position.set(10, 20, 10);
         directionalLight.castShadow = true;
         this.scene.add(directionalLight);
@@ -176,7 +177,7 @@ export class SceneManager {
         directionalLight.shadow.camera.bottom = -30;
         
         // Add a secondary light to fill in shadows
-        const fillLight = new THREE.DirectionalLight(0xffffcc, 0.3);
+        const fillLight = new THREE.DirectionalLight(0xFFFFCC, 0.3);
         fillLight.position.set(-5, 10, -5);
         this.scene.add(fillLight);
     }
@@ -245,7 +246,7 @@ export class SceneManager {
                 const speedFactor = 100;
                 
                 // Calculate new offset with proper wrapping
-                let newOffset = texture.offset.y - (scrollAmount / speedFactor);
+                let newOffset = texture.offset.y + (scrollAmount / speedFactor);
                 
                 // Apply new offset, ensuring we properly wrap
                 texture.offset.y = newOffset % 1;
@@ -256,105 +257,74 @@ export class SceneManager {
         }
     }
     
-    // Move scroll objects according to scroll amount
     moveScrollObjects(scrollAmount, deltaTime) {
         // Skip if no movement
         if (Math.abs(scrollAmount) < 0.0001) return;
-        
-        // Performance optimization: Process in batches when possible
-        const groundSegments = [];
-        const environmentElements = [];
-        const recycleThresholdZ = 100;  // When objects get recycled
-        let farthestNegSegmentZ = Infinity;  // Track most negative Z (farthest ahead)
-        const segmentLength = 250;
-        
-        // First pass: collect objects and find farthest segment
-        this.scrollObjects.forEach(object => {
+    
+        // Elements that are NOT dynamically recycled by environment.js but should scroll with the world
+        const decorativeEnvironmentElementsToScroll = [];
+    
+        // This method will NO LONGER manage ground segment recycling or movement directly.
+        // That is now solely the responsibility of environment.js's updateGroundSegments.
+        // Therefore, groundSegments collection and its specific recycling logic here are removed.
+    
+        this.scrollObjects.forEach(object => { // 'object' here is typically 'this.environment'
             object.traverse((child) => {
-                // Process ground segments first
+                // 1. Ground Segments:
+                // These are fully managed by environment.js's updateGroundSegments.
+                // moveScrollObjects should NOT touch their position or recycle them.
                 if (child.userData?.isGroundSegment) {
-                    groundSegments.push(child);
-                    
-                    // Track the farthest (most negative Z) segment position
-                    const frontEdgeZ = child.position.z - (segmentLength/2);
-                    if (frontEdgeZ < farthestNegSegmentZ) {
-                        farthestNegSegmentZ = frontEdgeZ;
+                    // DO NOTHING with ground segments here.
+                    return; // Skip to next child
+                }
+    
+                // 2. Environment Elements:
+                if (child.userData?.isEnvironmentElement) {
+                    const elementType = child.userData.elementType;
+                    // Pencils, erasers, and spots are dynamically recycled by environment.js's updateEnvironmentElements.
+                    // moveScrollObjects should NOT touch their position.
+                    if (elementType === 'pencil' || elementType === 'eraser' || elementType === 'spot') {
+                        // DO NOTHING with these dynamically recycled elements here.
+                        return; // Skip to next child
+                    } else {
+                        // These are other environment elements (e.g., holes, stains, tears from addPaperElements)
+                        // that are NOT in environment.js's dynamic recycling loop.
+                        // These CAN be scrolled by this method if the world-scrolling effect is desired for them.
+                        decorativeEnvironmentElementsToScroll.push(child);
                     }
                 }
-                // Collect environment elements for batch processing
-                else if (child.userData?.isEnvironmentElement && !child.userData?.isGroundSegment) {
-                    environmentElements.push(child);
-                }
+                // Add other conditions here if there are other types of scrollable children
+                // not covered by the above userData flags.
             });
         });
-        
-        // Early return if no objects found
-        if (groundSegments.length === 0 && environmentElements.length === 0) return;
-        
-        // Process ground segments
-        const recycledSegments = [];
-        groundSegments.forEach((segment) => {
-            // Move the segment forward
-            segment.position.z += scrollAmount;
-            
-            // Check if segment needs recycling
-            if (segment.position.z > recycleThresholdZ) {
-                // Calculate new position with overlap to ensure no gaps
-                const segmentOverlap = 5;
-                const newZ = farthestNegSegmentZ - (segmentLength - segmentOverlap);
-                
-                // Update position
-                segment.position.z = newZ;
-                
-                // Start fade-in effect
-                segment.userData.recycleTime = performance.now();
-                segment.material.opacity = 0.0;
-                
-                recycledSegments.push(segment);
-                
-                // Update farthest position tracker (important for multiple recycling in same frame)
-                farthestNegSegmentZ = newZ - (segmentLength/2);
+    
+        // If there are no decorative elements to scroll, we can return.
+        if (decorativeEnvironmentElementsToScroll.length === 0) {
+            if (DEBUG_SCROLLING && Math.random() < 0.1) { // Reduce log frequency
+                console.log(`[moveScrollObjects] No decorative elements designated for scrolling by this method.`);
             }
-        });
-        
-        // Process fade-in for recycled segments
-        groundSegments.forEach((segment) => {
-            if (segment.userData?.recycleTime && segment.material) {
-                const fadeTime = 300; // 300ms fade-in
-                const elapsedTime = performance.now() - segment.userData.recycleTime;
-                const fadeProgress = Math.min(elapsedTime / fadeTime, 1.0);
-                
-                // Apply fade
-                segment.material.opacity = fadeProgress;
-                
-                // Once fully faded in, clean up
-                if (fadeProgress >= 1.0) {
-                    segment.material.opacity = 1.0;
-                    delete segment.userData.recycleTime;
-                }
-            }
-        });
-        
-        // Batch process environment elements - FIXED
-        let elementsMoved = 0;
-        environmentElements.forEach((element) => {
-            // Skip processing for elements managed by the grid system
-            if (element.userData.initialZ !== undefined) {
-                // Move the element by scrollAmount
-                element.position.z += scrollAmount;
-                
-                // Update initialZ to keep consistent with scene-manager scrolling 
-                element.userData.initialZ += scrollAmount;
-                
-                elementsMoved++;
-                
-                // IMPORTANT - don't recycle here, that's handled by updateEnvironmentElements
-            }
-        });
-        
-        if (DEBUG_SCROLLING && Math.random() < 0.01) {
-            console.log(`Moved ${elementsMoved} environment elements by ${scrollAmount.toFixed(3)} units`);
+            return;
         }
+    
+        // Process the decorative environment elements that ARE meant to be scrolled by this method.
+        let elementsMovedCount = 0;
+        decorativeEnvironmentElementsToScroll.forEach((element) => {
+            // Move the element by scrollAmount to create the scrolling illusion.
+            element.position.z += scrollAmount;
+            elementsMovedCount++;
+            // Note: We are NOT updating element.userData.initialZ here anymore for these elements,
+            // as that was causing conflicts and its necessity for simple scrolling is unclear.
+            // If these decorative elements had their own separate lifecycle based on initialZ,
+            // that would need specific handling. For now, just scrolling their position.
+        });
+    
+        if (DEBUG_SCROLLING && elementsMovedCount > 0 && Math.random() < 0.01) {
+            console.log(`[moveScrollObjects] Scrolled ${elementsMovedCount} decorative environment elements by ${scrollAmount.toFixed(3)} units`);
+        }
+    
+        // The original logic for this method to recycle ground segments (including farthestNegSegmentZ tracking
+        // and fade-in effects for segments recycled *by this method*) has been removed,
+        // as this responsibility is now fully with environment.js.
     }
 
     onWindowResize() {
@@ -441,7 +411,7 @@ export class SceneManager {
             }
             
             // Update environment elements less frequently
-            const environmentUpdateInterval = 200; // 5 updates per second max
+            const environmentUpdateInterval = 100; // 5 updates per second max
             if (currentTime - this._lastEnvironmentUpdateTime > environmentUpdateInterval) {
                 if (this.environment) {
                     // IMPORTANT: This is what recycles elements when they're too far behind
